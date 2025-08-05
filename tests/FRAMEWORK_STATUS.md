@@ -8,7 +8,8 @@ Se ha establecido exitosamente un framework de testing completo y funcional para
 ### Estadísticas de Tests
 - **Tests Unitarios**: 40 tests - ✅ **TODOS PASANDO**
 - **Tests de Integración**: 9 tests - ⚠️ 4 funcionando, 5 necesitan ajustes de mocking
-- **Total**: 49 tests implementados
+- **Tests de Integridad**: 30 tests - ✅ **TODOS PASANDO** (Protegen Fases 1 y 2)
+- **Total**: 79 tests implementados
 
 ### Componentes del Framework
 
@@ -22,6 +23,10 @@ tests/
 │   └── test_phase3_planning.py         # 14 tests ✅
 ├── integration/                        # Tests de integración
 │   └── test_url_collection_integration.py  # 9 tests (4 ✅, 5 ⚠️)
+├── integrity/                          # Tests de integridad para Fases 1 & 2
+│   ├── test_phases_integrity.py        # 18 tests ✅
+│   ├── test_critical_integrity.py      # 12 tests críticos ✅
+│   └── README.md                       # Documentación de integridad
 ├── fixtures/                           # Datos de prueba
 │   └── sample_data/
 └── data/                              # Archivos de test
@@ -142,11 +147,57 @@ python -m pytest --html=tests/reports/report.html
 3. **Crear FileOrganizer**: Implementar según tests de planificación
 4. **Integrar Selenium**: Usar fixtures configurados para web scraping
 
+### Tests de Integridad - Protección de Fases 1 y 2
+
+#### ✅ Framework de Protección (30/30 tests pasando)
+
+Los tests de integridad garantizan que el desarrollo de la Fase 3 no rompa la funcionalidad existente de las Fases 1 y 2.
+
+#### Comandos de Integridad
+
+```bash
+# Ejecutar todos los tests de integridad
+python -m pytest tests/integrity/ -v
+
+# OBLIGATORIO antes de cada commit - Tests críticos
+python -m pytest tests/integrity/ -m critical -v
+
+# Tests específicos por fase
+python -m pytest tests/integrity/test_phases_integrity.py::TestPhase1Integrity -v
+python -m pytest tests/integrity/test_phases_integrity.py::TestPhase2Integrity -v
+
+# Verificar contratos de API
+python -m pytest tests/integrity/test_critical_integrity.py::TestMainAPIIntegrity -v
+```
+
+#### Estructura de Protección
+
+**tests/integrity/test_phases_integrity.py** (18 tests)
+- TestPhase1Integrity: URLCollector functionality protection
+- TestPhase2Integrity: TalkURLExtractor functionality protection  
+- TestCrossPhaseIntegrity: Phase interaction validation
+- TestDatabaseIntegrity: Schema and data consistency
+
+**tests/integrity/test_critical_integrity.py** (12 tests críticos)
+- TestCriticalPhase1Scenarios: Essential URL collection workflows
+- TestCriticalPhase2Scenarios: Essential talk extraction workflows
+- TestCriticalDataIntegrity: Database security and integrity
+- TestMainAPIIntegrity: Core API contract protection
+
+#### Reglas de Desarrollo para Fase 3
+
+- ✅ **OBLIGATORIO**: Ejecutar `pytest tests/integrity/ -m critical` antes de cada commit
+- ✅ **OBLIGATORIO**: Todos los tests de integridad deben pasar (30/30)
+- ❌ **PROHIBIDO**: Modificar APIs de URLCollector.collect_all_urls()
+- ❌ **PROHIBIDO**: Modificar APIs de TalkURLExtractor.extract_all_talk_urls()
+- ❌ **PROHIBIDO**: Cambiar esquema de base de datos sin actualizar tests
+
 ### Conclusión
 
 ✅ **El framework de testing está 100% funcional para desarrollo TDD**
 ✅ **Todas las dependencias están instaladas y configuradas**
 ✅ **Los tests unitarios cubren componentes existentes completamente**
-✅ **La estructura está lista para implementar Fase 3**
+✅ **Los tests de integridad protegen Fases 1 y 2 completamente**
+✅ **La estructura está lista para implementar Fase 3 con protección total**
 
-El framework permite desarrollo con confianza usando metodología TDD, garantizando calidad de código y facilitando refactoring durante la implementación de la Fase 3.
+El framework permite desarrollo con confianza usando metodología TDD, garantizando calidad de código y facilitando refactoring durante la implementación de la Fase 3, mientras protege completamente la funcionalidad existente.
