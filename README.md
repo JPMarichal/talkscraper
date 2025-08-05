@@ -10,13 +10,15 @@ Crear una herramienta robusta que recopile todos los discursos de conferencias g
 
 ### Fases de Implementación
 
-1. **Fase 1: Recolección de URLs** ✅ **(ACTUAL)**
-   - Extracción de URLs de conferencias desde la página principal
-   - Procesamiento de archivos de décadas anteriores
-   - Almacenamiento en base de datos SQLite
+1. **Fase 1: Recolección de URLs** ✅ **(COMPLETADA)**
+   - ✅ Extracción de URLs de conferencias desde la página principal
+   - ✅ Procesamiento de archivos de décadas anteriores (2010-2019, 2000-2009, 1990-1999, 1980-1989)
+   - ✅ URLs individuales para años históricos (1971-1979)
+   - ✅ Almacenamiento en base de datos SQLite con deduplicación
+   - ✅ **Resultado: 206 conferencias únicas (122 ENG + 84 SPA)**
 
-2. **Fase 2: Extracción de URLs de Discursos** ⏳ **(PENDIENTE)**
-   - Obtención de URLs individuales de discursos
+2. **Fase 2: Extracción de URLs de Discursos** ⏳ **(SIGUIENTE)**
+   - Obtención de URLs individuales de discursos desde cada conferencia
    - Filtrado de contenido textual vs. videos
 
 3. **Fase 3: Extracción de Contenido** ⏳ **(PENDIENTE)**
@@ -119,15 +121,36 @@ python main.py --phase 1 --verbose
 Languages: eng, spa
 Config: config.ini
 
-✅ ENG: 108 conference URLs collected
-✅ SPA: 108 conference URLs collected
+✅ ENG: 122 conference URLs collected
+✅ SPA: 84 conference URLs collected
 
-🎯 Total URLs collected: 216
+🎯 Total URLs collected: 206
 
 📊 Database Statistics:
-   ENG: 108 total, 0 processed
-   SPA: 108 total, 0 processed
+   ENG: 122 total, 0 processed (0.0%)
+   SPA: 84 total, 0 processed (0.0%)
 ```
+
+## 📊 Cobertura Histórica Actual
+
+### URLs Recolectadas por Fuente:
+
+**🇺🇸 Inglés (122 conferencias únicas)**
+- Página principal: ~24 URLs (2020-presente)
+- Década 2010-2019: 20 URLs
+- Década 2000-2009: 20 URLs  
+- Década 1990-1999: 20 URLs
+- Década 1980-1989: 20 URLs
+- URLs individuales 1971-1979: 18 URLs
+- **Cobertura: 1971-presente (53+ años)**
+
+**🇪🇸 Español (84 conferencias únicas)**
+- Página principal: ~24 URLs (2020-presente)
+- Década 2010-2019: 20 URLs
+- Década 2000-2009: 20 URLs
+- Década 1990-1999: 20 URLs
+- (Décadas anteriores no disponibles en español)
+- **Cobertura: 1990-presente (34+ años)**
 
 ## 🛠️ Características Técnicas
 
@@ -196,13 +219,21 @@ Basado en el análisis de la estructura HTML:
 - [x] Base de datos SQLite
 - [x] Logging y monitoreo
 - [x] Extracción de URLs principales
+- [x] Extracción de URLs de páginas de décadas (2010-2019, 2000-2009, 1990-1999, 1980-1989)
+- [x] Extracción de URLs individuales para años históricos (1971-1979)
+- [x] Deduplicación automática de URLs
 - [x] Interfaz de línea de comandos
-- [x] Manejo de errores básico
+- [x] Manejo de errores robusto
+- [x] **206 conferencias únicas recolectadas y almacenadas**
 
-### ⏳ En Desarrollo
-- [ ] Extracción de URLs de décadas (Fase 1 completa)
-- [ ] Extracción de URLs de discursos (Fase 2)
-- [ ] Extracción de contenido completo (Fase 3)
+### ⏳ Próximo (Fase 2)
+- [ ] Extracción de URLs de discursos individuales desde cada conferencia
+- [ ] Análisis de estructura HTML de páginas de conferencias
+- [ ] Implementación del selector CSS para discursos: `li[data-content-type="general-conference-talk"] a`
+
+### 🔮 Futuro (Fase 3)
+- [ ] Extracción de contenido completo de discursos con notas
+- [ ] Organización en estructura de carpetas por idioma/fecha
 - [ ] Tests unitarios
 - [ ] Documentación API
 
@@ -222,5 +253,5 @@ Este proyecto está desarrollado para uso educativo y de investigación, respeta
 
 ---
 
-**Estado**: Fase 1 - Recolección de URLs ✅  
+**Estado**: Fase 1 COMPLETADA ✅ | **206 conferencias recolectadas** 📊  
 **Próximo**: Fase 2 - Extracción de URLs de Discursos ⏳

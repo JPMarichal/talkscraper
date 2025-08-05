@@ -115,10 +115,73 @@ class URLCollector:
     
     def _extract_decade_urls(self, base_url: str) -> List[str]:
         """Extract conference URLs from decade archive pages."""
-        # Implementation for decade pages
-        # This will be expanded based on the specific structure
         self.logger.info("Extracting decade archive URLs")
-        return []  # Placeholder
+        
+        decade_urls = []
+        language = 'eng' if 'lang=eng' in base_url else 'spa'
+        
+        # Páginas de décadas conocidas
+        decade_pages = [
+            f"https://www.churchofjesuschrist.org/study/general-conference/20102019?lang={language}",
+            f"https://www.churchofjesuschrist.org/study/general-conference/20002009?lang={language}",
+            f"https://www.churchofjesuschrist.org/study/general-conference/19901999?lang={language}",
+            f"https://www.churchofjesuschrist.org/study/general-conference/19801989?lang={language}"
+        ]
+        
+        # Extraer URLs de páginas de décadas
+        for decade_url in decade_pages:
+            try:
+                self.logger.info(f"Processing decade page: {decade_url}")
+                response = self.session.get(decade_url, timeout=30)
+                response.raise_for_status()
+                
+                soup = BeautifulSoup(response.content, 'html.parser')
+                selector = self.config.get_conference_link_selector()
+                links = soup.select(selector)
+                
+                decade_count = 0
+                for link in links:
+                    href = link.get('href')
+                    if href and isinstance(href, str):
+                        full_url = urljoin(decade_url, href)
+                        decade_urls.append(full_url)
+                        decade_count += 1
+                
+                self.logger.info(f"Extracted {decade_count} URLs from {decade_url}")
+                
+            except Exception as e:
+                self.logger.error(f"Error processing decade page {decade_url}: {e}")
+        
+        # Agregar URLs individuales para años 1971-1979
+        individual_urls = self._extract_individual_year_urls(language)
+        decade_urls.extend(individual_urls)
+        
+        self.logger.info(f"Total decade archive URLs extracted: {len(decade_urls)}")
+        return decade_urls
+    
+    def _extract_individual_year_urls(self, language: str) -> List[str]:
+        """Extract URLs for individual years (1971-1979)."""
+        self.logger.info("Extracting individual year URLs (1971-1979)")
+        
+        individual_urls = []
+        
+        for year in range(1971, 1980):  # 1971-1979
+            for session in ['04', '10']:  # Abril y Octubre
+                url = f"https://www.churchofjesuschrist.org/study/general-conference/{year}/{session}?lang={language}"
+                
+                try:
+                    response = self.session.get(url, timeout=30)
+                    if response.status_code == 200:
+                        individual_urls.append(url)
+                        self.logger.debug(f"Added individual URL: {url}")
+                    else:
+                        self.logger.warning(f"URL not available: {url} (Status: {response.status_code})")
+                
+                except Exception as e:
+                    self.logger.error(f"Error checking individual URL {url}: {e}")
+        
+        self.logger.info(f"Extracted {len(individual_urls)} individual year URLs")
+        return individual_urls
     
     def get_stored_urls(self, language: str) -> List[str]:
         """Retrieve stored URLs from database."""

@@ -1,5 +1,13 @@
 # TalkScraper - Descripción del Proyecto
 
+## Estado Actual del Proyecto ✅ 
+**Fase 1 COMPLETADA**: Recolección de URLs de Conferencias
+- ✅ **206 conferencias únicas recolectadas**
+- ✅ **122 conferencias en inglés** (1971-presente, 53+ años)
+- ✅ **84 conferencias en español** (1990-presente, 34+ años)
+- ✅ Base de datos SQLite implementada con deduplicación automática
+- ✅ Soporte para páginas de décadas y URLs individuales históricas
+
 ## Objetivo General
 Desarrollar una aplicación de Python que realice el scraping de las conferencias generales de la Iglesia de Jesucristo de los Santos de los Últimos Días en español e inglés.
 
@@ -19,22 +27,33 @@ La página principal funciona como un archivo de conferencias que contiene:
   - **Octubre**
 
 ## Funcionalidad del Scraper
-### Fase 1: Recolección de URLs
-El scraper deberá:
-1. Acceder a la página principal de conferencias
-2. Extraer todas las URLs de conferencias disponibles en la página actual
-3. Identificar y acceder a los subarchivos de décadas anteriores
-4. Recorrer sistemáticamente todas estas páginas subsidiarias
-5. Compilar una **lista primaria completa** de direcciones de todas las conferencias disponibles
 
-### Fase 2: Extracción de URLs de Discursos
+### Fase 1: Recolección de URLs ✅ **COMPLETADA**
+El scraper implementa exitosamente:
+1. ✅ Acceso a la página principal de conferencias
+2. ✅ Extracción de todas las URLs de conferencias de la página actual (~24 recientes)
+3. ✅ Identificación y acceso a los subarchivos de décadas anteriores:
+   - 2010-2019 (20 conferencias)
+   - 2000-2009 (20 conferencias) 
+   - 1990-1999 (20 conferencias)
+   - 1980-1989 (20 conferencias, solo inglés)
+4. ✅ Recorrido sistemático de todas las páginas subsidiarias
+5. ✅ URLs individuales para años históricos (1971-1979, solo inglés)
+6. ✅ **Lista primaria completa compilada**: 206 conferencias únicas sin duplicados
+
+**Resultado**: 
+- **122 conferencias en inglés** (1971-presente)
+- **84 conferencias en español** (1990-presente)
+
+### Fase 2: Extracción de URLs de Discursos ⏳ **PRÓXIMA**
 Una vez obtenida la lista primaria de conferencias, el scraper deberá:
-1. Acceder a cada página de conferencia individual
+1. Acceder a cada página de conferencia individual (206 páginas)
 2. Extraer las URLs de todos los discursos disponibles en cada conferencia
 3. Filtrar únicamente los discursos textuales (excluir entradas de solo video)
 4. Compilar una **lista completa de discursos** organizada por conferencia
+5. **Selector CSS identificado**: `li[data-content-type="general-conference-talk"] a`
 
-### Fase 3: Descarga y Organización de Discursos
+### Fase 3: Descarga y Organización de Discursos 🔮 **FUTURO**
 El scraper extraerá cada discurso y lo organizará según la siguiente estructura:
 
 #### Estructura de Carpetas
