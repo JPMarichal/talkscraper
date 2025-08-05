@@ -1,0 +1,132 @@
+"""
+TalkScraper - URL Collection Module
+
+This module handles the collection of conference and talk URLs
+from the Church of Jesus Christ of Latter-day Saints website.
+
+Phase 1: Primary URL Collection
+- Main conference page scraping
+- Decade archive page processing
+- URL compilation and storage
+"""
+
+import logging
+import sqlite3
+from pathlib import Path
+from typing import List, Set, Tuple, Dict
+from urllib.parse import urljoin, urlparse
+
+import requests
+from bs4 import BeautifulSoup
+from tqdm import tqdm
+
+from utils.config_manager import ConfigManager
+from utils.database_manager import DatabaseManager
+from utils.logger_setup import setup_logger
+
+
+class URLCollector:
+    """
+    Handles collection of all conference and talk URLs.
+    
+    Implements Strategy pattern for different page types and
+    follows Single Responsibility principle.
+    """
+    
+    def __init__(self, config_path: str = "config.ini"):
+        """Initialize the URL collector with configuration."""
+        self.config = ConfigManager(config_path)
+        self.db = DatabaseManager(self.config.get_db_path())
+        self.logger = setup_logger(__name__, self.config.get_log_config())
+        
+        # Session configuration
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': self.config.get_user_agent()
+        })
+        
+    def collect_all_urls(self, languages: List[str] = None) -> Dict[str, List[str]]:
+        """
+        Main entry point for URL collection.
+        
+        Args:
+            languages: List of language codes ['eng', 'spa']. If None, collects both.
+            
+        Returns:
+            Dictionary with language codes as keys and URL lists as values.
+        """
+        if languages is None:
+            languages = ['eng', 'spa']
+            
+        self.logger.info(f"Starting URL collection for languages: {languages}")
+        
+        all_urls = {}
+        for lang in languages:
+            self.logger.info(f"Collecting URLs for language: {lang}")
+            urls = self._collect_language_urls(lang)
+            all_urls[lang] = urls
+            self.logger.info(f"Collected {len(urls)} URLs for {lang}")
+            
+        return all_urls
+    
+    def _collect_language_urls(self, language: str) -> List[str]:
+        """Collect all conference URLs for a specific language."""
+        base_url = self.config.get_base_url(language)
+        
+        # Get URLs from main page
+        main_page_urls = self._extract_main_page_urls(base_url)
+        
+        # Get URLs from decade archive pages
+        decade_urls = self._extract_decade_urls(base_url)
+        
+        # Combine and deduplicate
+        all_urls = list(set(main_page_urls + decade_urls))
+        
+        # Store in database for persistence
+        self.db.store_conference_urls(language, all_urls)
+        
+        return all_urls
+    
+    def _extract_main_page_urls(self, base_url: str) -> List[str]:
+        """Extract conference URLs from the main conference page."""
+        try:
+            response = self.session.get(base_url)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract conference links using CSS selector from config
+            selector = self.config.get_conference_link_selector()
+            links = soup.select(selector)
+            
+            urls = []
+            for link in links:
+                href = link.get('href')
+                if href:
+                    full_url = urljoin(base_url, href)
+                    urls.append(full_url)
+                    
+            self.logger.info(f"Extracted {len(urls)} URLs from main page")
+            return urls
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting main page URLs: {e}")
+            return []
+    
+    def _extract_decade_urls(self, base_url: str) -> List[str]:
+        """Extract conference URLs from decade archive pages."""
+        # Implementation for decade pages
+        # This will be expanded based on the specific structure
+        self.logger.info("Extracting decade archive URLs")
+        return []  # Placeholder
+    
+    def get_stored_urls(self, language: str) -> List[str]:
+        """Retrieve stored URLs from database."""
+        return self.db.get_conference_urls(language)
+    
+    def __del__(self):
+        """Cleanup resources."""
+        if hasattr(self, 'session'):
+            self.session.close()
+        if hasattr(self, 'db'):
+            self.db.close()
