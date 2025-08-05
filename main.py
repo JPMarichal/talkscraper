@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 from scrapers.url_collector import URLCollector
+from scrapers.talk_url_extractor import TalkURLExtractor
 from utils.logger_setup import setup_logger
 
 
@@ -101,6 +102,46 @@ def phase_1_url_collection(languages, config_path):
         return False
 
 
+def phase_2_talk_extraction(languages, config_path):
+    """Execute Phase 2: Talk URL Extraction."""
+    print("=== PHASE 2: TALK URL EXTRACTION ===")
+    print(f"Languages: {', '.join(languages)}")
+    print(f"Config: {config_path}")
+    print()
+    
+    try:
+        extractor = TalkURLExtractor(config_path)
+        
+        # Extract talk URLs for all specified languages
+        results = extractor.extract_all_talk_urls(languages)
+        
+        # Display results
+        total_talks = 0
+        for lang, count in results.items():
+            print(f"✅ {lang.upper()}: {count} talk URLs extracted")
+            total_talks += count
+        
+        print(f"\n🎯 Total talk URLs extracted: {total_talks}")
+        
+        # Show updated statistics
+        stats = extractor.get_extraction_stats()
+        if stats:
+            print("\n📊 Extraction Statistics:")
+            for lang, data in stats.items():
+                if 'conferences' in data:
+                    conf = data['conferences']
+                    print(f"   {lang.upper()} Conferences: {conf['processed']}/{conf['total']} processed")
+                if 'talks' in data:
+                    talks = data['talks']
+                    print(f"   {lang.upper()} Talks: {talks['total']} extracted")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Error in Phase 2: {e}")
+        return False
+
+
 def show_statistics(config_path):
     """Show current processing statistics."""
     try:
@@ -150,11 +191,10 @@ def main():
     if args.phase == 1:
         success = phase_1_url_collection(args.languages, str(config_path))
     elif args.phase == 2:
-        print("⚠️  Phase 2 (Talk URL Collection) not implemented yet")
-        print("Current implementation focuses on Phase 1 only")
+        success = phase_2_talk_extraction(args.languages, str(config_path))
     elif args.phase == 3:
         print("⚠️  Phase 3 (Content Extraction) not implemented yet")
-        print("Current implementation focuses on Phase 1 only")
+        print("Use Phase 2 to extract talk URLs first")
     
     return 0 if success else 1
 

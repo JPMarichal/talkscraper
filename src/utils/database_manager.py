@@ -223,3 +223,91 @@ class DatabaseManager:
         """Close database connection (if needed for cleanup)."""
         # SQLite connections are automatically closed when using context manager
         pass
+    
+    def get_unprocessed_conference_urls(self, language: str) -> List[str]:
+        """
+        Get list of conference URLs that haven't been processed for talk extraction.
+        
+        Args:
+            language: Language code (eng/spa)
+            
+        Returns:
+            List of unprocessed conference URLs
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT url FROM conference_urls 
+                WHERE language = ? AND processed = FALSE
+                ORDER BY url
+            ''', (language,))
+            
+            return [row[0] for row in cursor.fetchall()]
+    
+    def mark_conference_processed(self, conference_url: str):
+        """
+        Mark a conference URL as processed.
+        
+        Args:
+            conference_url: Conference URL to mark as processed
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE conference_urls 
+                SET processed = TRUE 
+                WHERE url = ?
+            ''', (conference_url,))
+            conn.commit()
+    
+    def get_talk_extraction_stats(self) -> dict:
+        """
+        Get statistics about talk URL extraction progress.
+        
+        Returns:
+            Dictionary with extraction statistics
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            stats = {}
+            
+            # Conference processing stats
+            cursor.execute('''
+                SELECT language, 
+                       COUNT(*) as total_conferences, 
+                       SUM(CASE WHEN processed = TRUE THEN 1 ELSE 0 END) as processed_conferences
+                FROM conference_urls 
+                GROUP BY language
+            ''')
+            
+            for row in cursor.fetchall():
+                language, total_conf, processed_conf = row
+                if language not in stats:
+                    stats[language] = {}
+                stats[language]['conferences'] = {
+                    'total': total_conf,
+                    'processed': processed_conf,
+                    'pending': total_conf - processed_conf
+                }
+            
+            # Talk URL stats
+            cursor.execute('''
+                SELECT language, 
+                       COUNT(*) as total_talks,
+                       SUM(CASE WHEN processed = TRUE THEN 1 ELSE 0 END) as processed_talks
+                FROM talk_urls 
+                GROUP BY language
+            ''')
+            
+            for row in cursor.fetchall():
+                language, total_talks, processed_talks = row
+                if language not in stats:
+                    stats[language] = {}
+                stats[language]['talks'] = {
+                    'total': total_talks,
+                    'processed': processed_talks,
+                    'pending': total_talks - processed_talks
+                }
+            
+            return stats
