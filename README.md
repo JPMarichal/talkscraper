@@ -152,6 +152,39 @@ Config: config.ini
 - (Décadas anteriores no disponibles en español)
 - **Cobertura: 1990-presente (34+ años)**
 
+## 🧪 Testing
+
+El proyecto incluye un framework completo de testing basado en pytest:
+
+### Ejecutar Tests
+```bash
+# Instalar dependencias de testing
+pip install -r requirements.txt
+
+# Ejecutar todos los tests
+python run_tests.py --type all
+
+# Solo tests unitarios
+python run_tests.py --type unit
+
+# Solo tests de integración 
+python run_tests.py --type integration
+
+# Tests con cobertura de código
+python run_tests.py --type coverage --html-report
+
+# Tests rápidos (sin selenium)
+python run_tests.py --type fast
+```
+
+### Estructura de Testing
+- **Unit Tests**: Tests para componentes individuales (`tests/unit/`)
+- **Integration Tests**: Tests para flujos completos (`tests/integration/`)
+- **Test Data**: Datos de ejemplo para testing (`tests/data/`)
+- **Fixtures**: Configuraciones reutilizables (`tests/conftest.py`)
+
+Ver [tests/README.md](tests/README.md) para más detalles.
+
 ## 🛠️ Características Técnicas
 
 ### Tecnologías Utilizadas
@@ -234,7 +267,7 @@ Basado en el análisis de la estructura HTML:
 ### 🔮 Futuro (Fase 3)
 - [ ] Extracción de contenido completo de discursos con notas
 - [ ] Organización en estructura de carpetas por idioma/fecha
-- [ ] Tests unitarios
+- [x] Framework de testing (pytest) con cobertura de código
 - [ ] Documentación API
 
 ## 🤝 Contribución
