@@ -380,6 +380,16 @@ class TalkContentExtractor:
             # Remove unnecessary attributes using regex
             content = re.sub(r' data-aid="[^"]*"', '', content)
             content = re.sub(r' id="[^"]*"', '', content)
+            content = re.sub(r' data-scroll-id="[^"]*"', '', content)
+            
+            # Fix note references to point to our own footnotes
+            # Convert href="/study/...#note1" to href="#note1" and change class
+            content = re.sub(r'class="note-ref"', 'class="note-link"', content)
+            content = re.sub(r'href="[^"]*#note(\d+)"', r'href="#note\1"', content)
+            
+            # Ensure note superscripts are visible by adding text content
+            # Fix <sup class="marker" data-value="X"></sup> to <sup>X</sup>
+            content = re.sub(r'<sup class="marker" data-value="(\d+)"></sup>', r'<sup>\1</sup>', content)
             
             # Clean up whitespace but preserve structure
             content = re.sub(r'\s+', ' ', content)
@@ -535,7 +545,13 @@ class TalkContentExtractor:
         """
         notes_html = ""
         if talk_data.notes:
-            notes_list = "\n".join([f"        <li>{note}</li>" for note in talk_data.notes])
+            # Generate notes with proper anchors for internal linking
+            notes_items = []
+            for i, note in enumerate(talk_data.notes, 1):
+                # Remove [noteX] prefix if present and add proper anchor
+                clean_note = re.sub(r'^\[note\d+\]\s*', '', note)
+                notes_items.append(f'        <li id="note{i}"><a name="note{i}"></a>{clean_note}</li>')
+            notes_list = "\n".join(notes_items)
             notes_html = f"""
     <div class="notes">
         <h2>Notas</h2>
@@ -605,6 +621,14 @@ class TalkContentExtractor:
         .notes li {{
             margin-bottom: 8px;
             font-size: 0.9em;
+        }}
+        .note-link {{
+            color: #3498db;
+            text-decoration: none;
+            font-weight: bold;
+        }}
+        .note-link:hover {{
+            text-decoration: underline;
         }}
         .extraction-info {{
             margin-top: 40px;
