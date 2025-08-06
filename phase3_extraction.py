@@ -34,8 +34,8 @@ def main():
                        help='Language to process (default: eng)')
     parser.add_argument('--limit', type=int, default=None,
                        help='Limit number of talks to process')
-    parser.add_argument('--batch-size', type=int, default=5,
-                       help='Number of talks to process in each batch (default: 5)')
+    parser.add_argument('--batch-size', type=int, default=12,
+                       help='Number of talks to process in each batch (default: 12 - optimized for 64GB RAM)')
     parser.add_argument('--config', default='config.ini',
                        help='Configuration file path (default: config.ini)')
     

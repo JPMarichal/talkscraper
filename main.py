@@ -76,8 +76,8 @@ def parse_arguments():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=3,
-        help="Number of talks to process simultaneously in Phase 3 (default: 3)"
+        default=12,
+        help="Number of talks to process simultaneously in Phase 3 (default: 12 - optimized for high memory systems)"
     )
     
     return parser.parse_args()
@@ -158,7 +158,7 @@ def phase_2_talk_extraction(languages, config_path):
         return False
 
 
-def phase_3_content_extraction(config_path, limit=None, batch_size=3):
+def phase_3_content_extraction(config_path, limit=None, batch_size=12):
     """Execute Phase 3: Complete Content Extraction with optimized quality."""
     print("=== PHASE 3: COMPLETE CONTENT EXTRACTION ===")
     print(f"Config: {config_path}")

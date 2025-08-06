@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, asdict
 from urllib.parse import urlparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from threading import Lock
 
 import requests
 from bs4 import BeautifulSoup
@@ -695,18 +697,18 @@ class TalkContentExtractor:
         
         return '\n'.join(formatted_paragraphs)
     
-    def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 5) -> Dict[str, int]:
+    def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 12) -> Dict[str, int]:
         """
-        Extract multiple talks in batches.
+        Extract multiple talks in parallel batches using ThreadPoolExecutor.
         
         Args:
             talk_urls: List of talk URLs to extract
-            batch_size: Number of talks to process in each batch
+            batch_size: Number of talks to process concurrently (default: 12 for 64GB RAM)
             
         Returns:
             Dictionary with extraction statistics
         """
-        self.logger.info(f"Starting batch extraction of {len(talk_urls)} talks")
+        self.logger.info(f"Starting concurrent extraction of {len(talk_urls)} talks with {batch_size} threads")
         
         stats = {
             'total': len(talk_urls),
@@ -715,38 +717,68 @@ class TalkContentExtractor:
             'saved': 0
         }
         
-        with tqdm(talk_urls, desc="Extracting talks", unit="talk") as pbar:
-            for i, url in enumerate(pbar):
-                try:
-                    # Extract complete talk data
-                    talk_data = self.extract_complete_talk(url)
-                    
-                    if talk_data:
-                        stats['successful'] += 1
-                        
-                        # Save to file
-                        saved_path = self.save_talk_to_file(talk_data)
-                        if saved_path:
-                            stats['saved'] += 1
-                        
-                        # Update progress bar
-                        pbar.set_postfix({
-                            'success': f"{stats['successful']}/{stats['total']}",
-                            'notes': talk_data.note_count
-                        })
-                    else:
-                        stats['failed'] += 1
-                        self.logger.warning(f"Failed to extract: {url}")
-                    
-                    # Rate limiting between requests
-                    if i < len(talk_urls) - 1:  # Don't sleep after the last request
-                        time.sleep(self.config.get_request_delay())
-                    
-                except Exception as e:
-                    stats['failed'] += 1
-                    self.logger.error(f"Error processing {url}: {e}")
+        # Thread-safe counters
+        stats_lock = Lock()
         
-        self.logger.info(f"Batch extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
+        def extract_single_talk(url: str) -> Optional[Tuple[str, bool, bool]]:
+            """Extract a single talk and return results."""
+            try:
+                # Extract complete talk data
+                talk_data = self.extract_complete_talk(url)
+                
+                if talk_data:
+                    # Save to file
+                    saved_path = self.save_talk_to_file(talk_data)
+                    saved = bool(saved_path)
+                    return (url, True, saved)
+                else:
+                    return (url, False, False)
+                    
+            except Exception as e:
+                self.logger.error(f"Error processing {url}: {e}")
+                return (url, False, False)
+        
+        # Process talks in parallel
+        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="TalkExtractor") as executor:
+            # Submit all jobs
+            future_to_url = {executor.submit(extract_single_talk, url): url for url in talk_urls}
+            
+            # Process completed futures with progress bar
+            with tqdm(total=len(talk_urls), desc="Extracting talks", unit="talk") as pbar:
+                for future in as_completed(future_to_url):
+                    url = future_to_url[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            _, success, saved = result
+                            
+                            # Update stats thread-safely
+                            with stats_lock:
+                                if success:
+                                    stats['successful'] += 1
+                                    if saved:
+                                        stats['saved'] += 1
+                                else:
+                                    stats['failed'] += 1
+                            
+                            # Update progress bar
+                            pbar.set_postfix({
+                                'success': f"{stats['successful']}/{stats['total']}",
+                                'failed': stats['failed'],
+                                'saved': stats['saved']
+                            })
+                        else:
+                            with stats_lock:
+                                stats['failed'] += 1
+                                
+                    except Exception as e:
+                        self.logger.error(f"Future exception for {url}: {e}")
+                        with stats_lock:
+                            stats['failed'] += 1
+                    
+                    pbar.update(1)
+        
+        self.logger.info(f"Concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
         return stats
     
     def get_unprocessed_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
