@@ -1,0 +1,762 @@
+#!/usr/bin/env python3
+"""
+TalkScraper - Talk Content Extractor Module
+
+This module handles the complete extraction of talk content including:
+- Title, author, position/calling, and content (static)
+- Notes (dynamic, using Selenium)
+- File organization and saving
+
+Phase 3: Complete Content Extraction
+"""
+
+import logging
+import time
+import re
+import os
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
+from dataclasses import dataclass, asdict
+from urllib.parse import urlparse
+
+import requests
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from tqdm import tqdm
+
+from utils.config_manager import ConfigManager
+from utils.database_manager import DatabaseManager
+from utils.logger_setup import setup_logger
+
+
+@dataclass
+class CompleteTalkData:
+    """Complete talk data structure including notes."""
+    title: str
+    author: str
+    calling: str  # Position/calling of the speaker
+    content: str
+    notes: List[str]  # List of extracted notes
+    url: str
+    language: str
+    year: str
+    conference_session: str
+    extraction_timestamp: str
+    note_count: int
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
+
+
+class TalkContentExtractor:
+    """
+    Complete talk content extractor for Phase 3.
+    Combines static content extraction with dynamic note extraction.
+    """
+    
+    def __init__(self, config_file: str):
+        """
+        Initialize the content extractor.
+        
+        Args:
+            config_file: Path to configuration file
+        """
+        self.config = ConfigManager(config_file)
+        self.db = DatabaseManager(self.config.get_db_path())
+        
+        # Setup logger
+        log_config = self.config.get_log_config()
+        self.logger = setup_logger('TalkContentExtractor', log_config)
+        
+        # Session for static content requests
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': self.config.get_user_agent()
+        })
+        
+        # Chrome options for Selenium (notes extraction)
+        selenium_config = self.config.get_selenium_config()
+        self.chrome_options = Options()
+        if selenium_config['headless']:
+            self.chrome_options.add_argument('--headless')
+        self.chrome_options.add_argument('--no-sandbox')
+        self.chrome_options.add_argument('--disable-dev-shm-usage')
+        self.chrome_options.add_argument('--disable-gpu')
+        self.chrome_options.add_argument('--window-size=1920,1080')
+        
+        # Output directory configuration
+        self.output_dir = Path('conf')  # Use default conf directory
+        self.ensure_output_structure()
+    
+    def ensure_output_structure(self):
+        """Ensure the output directory structure exists."""
+        for language in ['eng', 'spa']:
+            lang_dir = self.output_dir / language
+            lang_dir.mkdir(parents=True, exist_ok=True)
+    
+    def extract_complete_talk(self, url: str) -> Optional[CompleteTalkData]:
+        """
+        Extract complete talk data including static content and notes.
+        
+        Args:
+            url: Talk URL to extract from
+            
+        Returns:
+            CompleteTalkData object or None if extraction fails
+        """
+        self.logger.info(f"Starting complete extraction for: {url}")
+        
+        try:
+            # Step 1: Extract static content
+            static_data = self._extract_static_content(url)
+            if not static_data:
+                self.logger.error(f"Failed to extract static content from: {url}")
+                return None
+            
+            # Step 2: Extract notes using Selenium
+            notes = self._extract_notes_selenium(url)
+            if notes is None:
+                self.logger.warning(f"Failed to extract notes from: {url}, proceeding with static content only")
+                notes = []
+            
+            # Step 3: Combine data
+            complete_data = CompleteTalkData(
+                title=static_data['title'],
+                author=static_data['author'],
+                calling=static_data['calling'],
+                content=static_data['content'],
+                notes=notes,
+                url=url,
+                language=static_data['language'],
+                year=static_data['year'],
+                conference_session=static_data['conference_session'],
+                extraction_timestamp=time.strftime('%Y-%m-%d %H:%M:%S'),
+                note_count=len(notes)
+            )
+            
+            self.logger.info(f"Successfully extracted complete talk: '{complete_data.title}' by {complete_data.author} ({complete_data.note_count} notes)")
+            return complete_data
+            
+        except Exception as e:
+            self.logger.error(f"Error in complete extraction for {url}: {e}")
+            return None
+    
+    def _extract_static_content(self, url: str) -> Optional[Dict[str, str]]:
+        """
+        Extract static content using requests + BeautifulSoup.
+        
+        Args:
+            url: Talk URL to extract from
+            
+        Returns:
+            Dictionary with static content or None if extraction fails
+        """
+        try:
+            response = self.session.get(url, timeout=30)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract language from URL
+            language = 'eng' if 'lang=eng' in url else 'spa'
+            
+            # Extract year and session from URL
+            url_match = re.search(r'/general-conference/(\d{4})/(\d{2})/', url)
+            if not url_match:
+                self.logger.error(f"Could not parse year/session from URL: {url}")
+                return None
+                
+            year = url_match.group(1)
+            session_num = url_match.group(2)
+            conference_session = f"{year}-{session_num}"
+            
+            # Extract title
+            title = self._extract_title(soup)
+            if not title:
+                self.logger.error(f"Could not extract title from: {url}")
+                return None
+            
+            # Extract author
+            author = self._extract_author(soup)
+            if not author:
+                self.logger.error(f"Could not extract author from: {url}")
+                return None
+            
+            # Extract calling/position
+            calling = self._extract_calling(soup)
+            if not calling:
+                calling = "Posición no identificada"
+            
+            # Extract content
+            content = self._extract_content(soup)
+            if not content:
+                self.logger.error(f"Could not extract content from: {url}")
+                return None
+            
+            return {
+                'title': title,
+                'author': author,
+                'calling': calling,
+                'content': content,
+                'language': language,
+                'year': year,
+                'conference_session': conference_session
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting static content from {url}: {e}")
+            return None
+    
+    def _extract_title(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract talk title from HTML."""
+        title_selectors = [
+            'h1.title',
+            'h1',
+            '.title-block h1',
+            '.title',
+            '[data-testid="title"]',
+            '.study-title'
+        ]
+        
+        for selector in title_selectors:
+            element = soup.select_one(selector)
+            if element:
+                title = element.get_text(strip=True)
+                if title and len(title) > 3:
+                    return title
+        
+        return None
+    
+    def _extract_author(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract author name from HTML."""
+        # Try multiple selectors for author
+        author_selectors = [
+            '.byline .author',
+            '.author-name',
+            '.byline',
+            '.author',
+            '[data-testid="author"]',
+            '.study-author',
+            'p.author'
+        ]
+        
+        for selector in author_selectors:
+            element = soup.select_one(selector)
+            if element:
+                author = element.get_text(strip=True)
+                # Clean up author text (remove "By " prefix if present)
+                author = re.sub(r'^(By\s+|Por\s+)', '', author, flags=re.IGNORECASE)
+                if author and len(author) > 2:
+                    return author
+        
+        # Fallback: Look for "By [Name]" pattern in the first few paragraphs
+        paragraphs = soup.find_all('p')[:5]
+        for p in paragraphs:
+            text = p.get_text(strip=True)
+            # Look for "By Name" or "Por Name" pattern
+            match = re.search(r'^(By|Por)\s+([A-Z][a-zA-Z\s\.]+)', text, re.IGNORECASE)
+            if match:
+                author = match.group(2).strip()
+                if len(author) > 2:
+                    return author
+        
+        return None
+    
+    def _extract_calling(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract speaker's calling/position from HTML."""
+        # Try multiple selectors for calling
+        calling_selectors = [
+            '.byline .calling',
+            '.author-calling',
+            '.calling',
+            '.position',
+            '[data-testid="calling"]',
+            '.study-calling'
+        ]
+        
+        for selector in calling_selectors:
+            element = soup.select_one(selector)
+            if element:
+                calling = element.get_text(strip=True)
+                if calling and len(calling) > 3:
+                    return calling
+        
+        # Sometimes calling is in the same element as author, separated by comma or line break
+        byline_element = soup.select_one('.byline')
+        if byline_element:
+            byline_text = byline_element.get_text(separator='\n', strip=True)
+            lines = [line.strip() for line in byline_text.split('\n') if line.strip()]
+            if len(lines) >= 2:
+                # Second line often contains the calling
+                calling = lines[1]
+                if calling and len(calling) > 3:
+                    return calling
+        
+        # Alternative: Look for calling information in paragraphs near the author
+        paragraphs = soup.find_all('p')[:10]
+        for p in paragraphs:
+            text = p.get_text(strip=True)
+            # Common patterns for callings
+            calling_patterns = [
+                r'(President|Elder|Bishop|Member|Sister|Brother|Apostle)\s+of\s+',
+                r'(First|Second)\s+Counselor',
+                r'Presiding\s+Bishop',
+                r'General\s+(Authority|Officer)',
+                r'Quorum\s+of\s+the\s+Twelve',
+                r'First\s+Presidency'
+            ]
+            
+            for pattern in calling_patterns:
+                if re.search(pattern, text, re.IGNORECASE):
+                    # Extract the calling (first sentence or line)
+                    calling = text.split('.')[0].strip()
+                    if len(calling) > 5 and len(calling) < 100:
+                        return calling
+        
+        return None
+    
+    def _extract_content(self, soup: BeautifulSoup) -> Optional[str]:
+        """Extract main talk content from HTML, preserving formatting."""
+        # Try multiple selectors for content
+        content_selectors = [
+            '.body-block',
+            '.study-content',
+            '.content',
+            '[data-testid="content"]',
+            '.articleBody'
+        ]
+        
+        content_element = None
+        for selector in content_selectors:
+            element = soup.select_one(selector)
+            if element:
+                content_element = element
+                break
+        
+        if not content_element:
+            # Fallback: try to get all paragraphs
+            content_element = soup
+        
+        # Extract paragraphs while preserving HTML structure
+        paragraphs = content_element.find_all('p')
+        if not paragraphs:
+            return None
+        
+        formatted_paragraphs = []
+        for p in paragraphs:
+            # Skip paragraphs that might be metadata, bylines, etc.
+            p_text = p.get_text(strip=True)
+            if len(p_text) < 20:
+                continue
+            
+            # Format the paragraph while preserving important HTML elements
+            formatted_p = self._format_paragraph_html(p)
+            if formatted_p:
+                formatted_paragraphs.append(formatted_p)
+        
+        if formatted_paragraphs:
+            return '\n'.join(formatted_paragraphs)
+        
+        return None
+    
+    def _format_paragraph_html(self, paragraph) -> str:
+        """Format a single paragraph while preserving important HTML elements."""
+        try:
+            # Create a copy to avoid modifying the original
+            p_copy = BeautifulSoup(str(paragraph), 'html.parser')
+            p_elem = p_copy.find('p')
+            
+            if not p_elem:
+                return ""
+            
+            # Convert note references to internal links
+            note_refs = p_elem.find_all('a', class_='note-ref')
+            for note_ref in note_refs:
+                if hasattr(note_ref, 'get') and hasattr(note_ref, 'get_text'):
+                    href = note_ref.get('href', '')
+                    # Extract note ID from href (e.g., "#note1" -> "1")
+                    note_id = href.replace('#', '').replace('note', '') if href else note_ref.get_text(strip=True)
+                    note_text = note_ref.get_text(strip=True)
+                    
+                    # Create a better internal link
+                    if note_id:
+                        new_link = p_copy.new_tag('a', href=f"#note{note_id}", **{'class': 'note-link'})
+                        new_link.string = note_text
+                        note_ref.replace_with(new_link)
+            
+            # Preserve emphasis elements (convert b to strong, i to em)
+            for tag in p_elem.find_all(['b']):
+                if hasattr(tag, 'name'):
+                    tag.name = 'strong'
+            
+            for tag in p_elem.find_all(['i']):
+                if hasattr(tag, 'name'):
+                    tag.name = 'em'
+            
+            # Get HTML content without escaping
+            content = str(p_elem).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            
+            # Clean up whitespace but preserve structure
+            content = re.sub(r'\s+', ' ', content)
+            content = content.strip()
+            
+            return content
+            
+        except Exception as e:
+            # Fallback: return plain text if HTML processing fails
+            return f"<p>{paragraph.get_text(strip=True)}</p>"
+    
+    def _extract_notes_selenium(self, url: str) -> Optional[List[str]]:
+        """
+        Extract notes using Selenium for JavaScript-rendered content.
+        
+        Args:
+            url: Talk URL to extract notes from
+            
+        Returns:
+            List of notes or None if extraction fails
+        """
+        driver = None
+        notes = []
+        
+        try:
+            self.logger.debug(f"Starting Selenium note extraction for: {url}")
+            driver = webdriver.Chrome(options=self.chrome_options)
+            
+            # Load the page
+            driver.get(url)
+            
+            # Wait for page to load
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            
+            # Try to activate "Related Content" button
+            self._activate_related_content(driver)
+            
+            # Wait a bit for content to load
+            time.sleep(3)
+            
+            # Extract notes from li elements with id starting with "note"
+            note_elements = driver.find_elements(By.CSS_SELECTOR, 'li[id^="note"]')
+            self.logger.debug(f"Found {len(note_elements)} note elements")
+            
+            for element in note_elements:
+                note_id = element.get_attribute('id')
+                try:
+                    # Get the innerHTML for complete content
+                    inner_html = driver.execute_script("return arguments[0].innerHTML;", element)
+                    
+                    if inner_html and inner_html.strip():
+                        # Clean the HTML to get text only
+                        soup = BeautifulSoup(inner_html, 'html.parser')
+                        clean_text = soup.get_text(strip=True)
+                        
+                        if clean_text and len(clean_text) > 5:
+                            notes.append(f"[{note_id}] {clean_text}")
+                            self.logger.debug(f"Extracted note {note_id}: {clean_text[:50]}...")
+                        
+                except Exception as e:
+                    self.logger.warning(f"Error extracting note {note_id}: {e}")
+            
+            self.logger.info(f"Successfully extracted {len(notes)} notes from: {url}")
+            return notes
+            
+        except Exception as e:
+            self.logger.error(f"Error in Selenium note extraction for {url}: {e}")
+            return None
+        finally:
+            if driver:
+                driver.quit()
+    
+    def _activate_related_content(self, driver):
+        """Try to activate the Related Content button."""
+        try:
+            related_content_selectors = [
+                'button[data-testid="related-content"]',
+                'button[aria-label*="Related"]',
+                'button[title*="Related"]'
+            ]
+            
+            for selector in related_content_selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        element = elements[0]
+                        if element.is_displayed() and element.is_enabled():
+                            driver.execute_script("arguments[0].click();", element)
+                            self.logger.debug("Activated Related Content button")
+                            # Wait for content to load
+                            time.sleep(2)
+                            return True
+                except Exception:
+                    continue
+            
+            self.logger.debug("Could not activate Related Content button")
+            return False
+            
+        except Exception as e:
+            self.logger.warning(f"Error activating Related Content: {e}")
+            return False
+    
+    def save_talk_to_file(self, talk_data: CompleteTalkData) -> Optional[str]:
+        """
+        Save talk data to HTML file following the project's naming convention.
+        
+        Args:
+            talk_data: Complete talk data to save
+            
+        Returns:
+            Path to saved file or None if save fails
+        """
+        try:
+            # Create directory structure: lang/YYYYMM/
+            year_month = f"{talk_data.year}{talk_data.conference_session.split('-')[1]}"
+            output_dir = self.output_dir / talk_data.language / year_month
+            output_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Clean filename (remove problematic characters)
+            safe_title = re.sub(r'[<>:"/\\|?*]', '', talk_data.title)
+            safe_author = re.sub(r'[<>:"/\\|?*.]', '', talk_data.author)
+            safe_author = safe_author.replace('.', '')  # Remove periods
+            
+            # Construct filename: "Title (Author).html"
+            filename = f"{safe_title} ({safe_author}).html"
+            file_path = output_dir / filename
+            
+            # Generate HTML content
+            html_content = self._generate_html_content(talk_data)
+            
+            # Save file
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            
+            self.logger.info(f"Saved talk to: {file_path}")
+            return str(file_path)
+            
+        except Exception as e:
+            self.logger.error(f"Error saving talk {talk_data.title}: {e}")
+            return None
+    
+    def _generate_html_content(self, talk_data: CompleteTalkData) -> str:
+        """
+        Generate HTML content for the talk file.
+        
+        Args:
+            talk_data: Complete talk data
+            
+        Returns:
+            HTML content as string
+        """
+        notes_html = ""
+        if talk_data.notes:
+            notes_list = "\n".join([f"        <li>{note}</li>" for note in talk_data.notes])
+            notes_html = f"""
+    <div class="notes">
+        <h2>Notas</h2>
+        <ol>
+{notes_list}
+        </ol>
+    </div>"""
+        
+        return f"""<!DOCTYPE html>
+<html lang="{talk_data.language}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{talk_data.title} - {talk_data.author}</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }}
+        .header {{
+            text-align: center;
+            border-bottom: 2px solid #ccc;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }}
+        h1 {{
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }}
+        .author {{
+            font-size: 1.2em;
+            color: #34495e;
+            margin-bottom: 5px;
+        }}
+        .calling {{
+            font-style: italic;
+            color: #7f8c8d;
+            margin-bottom: 10px;
+        }}
+        .metadata {{
+            font-size: 0.9em;
+            color: #95a5a6;
+        }}
+        .content {{
+            text-align: justify;
+            margin: 30px 0;
+        }}
+        .content p {{
+            margin-bottom: 15px;
+        }}
+        .notes {{
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ccc;
+        }}
+        .notes h2 {{
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }}
+        .notes ol {{
+            padding-left: 20px;
+        }}
+        .notes li {{
+            margin-bottom: 8px;
+            font-size: 0.9em;
+        }}
+        .extraction-info {{
+            margin-top: 40px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            font-size: 0.8em;
+            color: #7f8c8d;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>{talk_data.title}</h1>
+        <div class="author">{talk_data.author}</div>
+        <div class="calling">{talk_data.calling}</div>
+        <div class="metadata">
+            {talk_data.conference_session} | {talk_data.language.upper()} | {talk_data.note_count} notas
+        </div>
+    </div>
+    
+    <div class="content">
+        {talk_data.content}
+    </div>
+{notes_html}
+    
+    <div class="extraction-info">
+        <strong>Información de extracción:</strong><br>
+        URL original: <a href="{talk_data.url}" target="_blank">{talk_data.url}</a><br>
+        Extraído: {talk_data.extraction_timestamp}<br>
+        Notas extraídas: {talk_data.note_count}
+    </div>
+</body>
+</html>"""
+    
+    def _format_content_paragraphs(self, content: str) -> str:
+        """Format content text into HTML paragraphs."""
+        paragraphs = content.split('\n\n')
+        formatted_paragraphs = []
+        
+        for para in paragraphs:
+            para = para.strip()
+            if para:
+                # Escape HTML characters
+                para = para.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                formatted_paragraphs.append(f"        <p>{para}</p>")
+        
+        return '\n'.join(formatted_paragraphs)
+    
+    def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 5) -> Dict[str, int]:
+        """
+        Extract multiple talks in batches.
+        
+        Args:
+            talk_urls: List of talk URLs to extract
+            batch_size: Number of talks to process in each batch
+            
+        Returns:
+            Dictionary with extraction statistics
+        """
+        self.logger.info(f"Starting batch extraction of {len(talk_urls)} talks")
+        
+        stats = {
+            'total': len(talk_urls),
+            'successful': 0,
+            'failed': 0,
+            'saved': 0
+        }
+        
+        with tqdm(talk_urls, desc="Extracting talks", unit="talk") as pbar:
+            for i, url in enumerate(pbar):
+                try:
+                    # Extract complete talk data
+                    talk_data = self.extract_complete_talk(url)
+                    
+                    if talk_data:
+                        stats['successful'] += 1
+                        
+                        # Save to file
+                        saved_path = self.save_talk_to_file(talk_data)
+                        if saved_path:
+                            stats['saved'] += 1
+                        
+                        # Update progress bar
+                        pbar.set_postfix({
+                            'success': f"{stats['successful']}/{stats['total']}",
+                            'notes': talk_data.note_count
+                        })
+                    else:
+                        stats['failed'] += 1
+                        self.logger.warning(f"Failed to extract: {url}")
+                    
+                    # Rate limiting between requests
+                    if i < len(talk_urls) - 1:  # Don't sleep after the last request
+                        time.sleep(self.config.get_request_delay())
+                    
+                except Exception as e:
+                    stats['failed'] += 1
+                    self.logger.error(f"Error processing {url}: {e}")
+        
+        self.logger.info(f"Batch extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
+        return stats
+    
+    def get_unprocessed_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
+        """
+        Get list of unprocessed talk URLs from the database.
+        
+        Args:
+            language: Language to filter ('eng' or 'spa')
+            limit: Maximum number of URLs to return
+            
+        Returns:
+            List of unprocessed talk URLs
+        """
+        try:
+            urls = self.db.get_unprocessed_talk_urls(language, limit)
+            self.logger.info(f"Retrieved {len(urls)} unprocessed {language} talk URLs")
+            return urls
+        except Exception as e:
+            self.logger.error(f"Error retrieving unprocessed URLs for {language}: {e}")
+            return []
+    
+    def mark_talk_processed(self, url: str, success: bool = True):
+        """Mark a talk URL as processed in the database."""
+        try:
+            self.db.mark_talk_processed(url, success)
+        except Exception as e:
+            self.logger.error(f"Error marking {url} as processed: {e}")
+    
+    def __del__(self):
+        """Cleanup resources."""
+        if hasattr(self, 'session'):
+            self.session.close()
+        if hasattr(self, 'db'):
+            self.db.close()

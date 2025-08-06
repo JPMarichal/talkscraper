@@ -1,0 +1,65 @@
+{
+  "timestamp": "20250806_093759",
+  "language": "english",
+  "total_tests": 5,
+  "successful": 5,
+  "failed": 0,
+  "results": [
+    {
+      "url": "https://www.churchofjesuschrist.org/study/general-conference/2025/04/21andersen?lang=eng",
+      "talk_name": "21Andersen",
+      "expected": 23,
+      "actual": 23,
+      "success": true,
+      "notes": [
+        "[note1] John 13:35; see alsoMatthew 22:36–40.",
+        "[note2] Personal correspondence, Feb. 6, 2025; used with permission.",
+        "[note3] Personal correspondence, Feb. 6, 2025; used with permission."
+      ]
+    },
+    {
+      "url": "https://www.churchofjesuschrist.org/study/general-conference/1977/10/the-foundations-of-righteousness?lang=eng",
+      "talk_name": "The Foundations Of Righteousness",
+      "expected": 0,
+      "actual": 0,
+      "success": true,
+      "notes": []
+    },
+    {
+      "url": "https://www.churchofjesuschrist.org/study/general-conference/2020/04/23soares?lang=eng",
+      "talk_name": "23Soares",
+      "expected": 26,
+      "actual": 26,
+      "success": true,
+      "notes": [
+        "[note1] Joseph Smith, in “Minute Book 1,” 44, josephsmithpapers.org; also at Church History Library, Salt Lake City; capitalization standardized.",
+        "[note2] See3 Nephi 11–26.",
+        "[note3] SeeEzekiel 37:21–28;1 Nephi 13:34–41;3 Nephi 20:46;21:1–11;title page of the Book of Mormon."
+      ]
+    },
+    {
+      "url": "https://www.churchofjesuschrist.org/study/general-conference/2015/04/the-family-is-of-god?lang=eng",
+      "talk_name": "The Family Is Of God",
+      "expected": 16,
+      "actual": 16,
+      "success": true,
+      "notes": [
+        "[note1] See “The Family Is of God,” inFamilies Are Forever: 2014 Outline for Sharing Time(2013), 28–29.",
+        "[note2] “The Family: A Proclamation to the World,”EnsignorLiahona,Nov. 2010, 129.",
+        "[note3] “Young Women Theme,” inYoung Women Personal Progress(booklet, 2009), 3."
+      ]
+    },
+    {
+      "url": "https://www.churchofjesuschrist.org/study/general-conference/2000/04/the-cloven-tongues-of-fire?lang=eng",
+      "talk_name": "The Cloven Tongues Of Fire",
+      "expected": 36,
+      "actual": 36,
+      "success": true,
+      "notes": [
+        "[note1] Edwin Markham, “Man-Making,” inMasterpieces of Religious Verse,ed. James Dalton Morrison (1948), 419.",
+        "[note2] Matt. 3:11.",
+        "[note3] Matt. 3:13."
+      ]
+    }
+  ]
+}

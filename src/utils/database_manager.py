@@ -7,7 +7,7 @@ Handles SQLite database operations for storing scraping progress and URLs.
 import sqlite3
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Dict, Union
 from datetime import datetime
 
 
@@ -130,17 +130,6 @@ class DatabaseManager:
         
         return urls
     
-    def mark_conference_processed(self, url: str):
-        """Mark a conference URL as processed."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                UPDATE conference_urls 
-                SET processed = TRUE 
-                WHERE url = ?
-            ''', (url,))
-            conn.commit()
-    
     def store_talk_urls(self, conference_url: str, language: str, talk_urls: List[str]) -> int:
         """
         Store talk URLs associated with a conference.
@@ -175,7 +164,7 @@ class DatabaseManager:
         
         return stored_count
     
-    def get_processing_stats(self) -> dict:
+    def get_processing_stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         """Get processing statistics."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -207,8 +196,8 @@ class DatabaseManager:
             'talks': talk_stats
         }
     
-    def log_operation(self, operation: str, status: str, language: str = None, 
-                     url: str = None, message: str = None):
+    def log_operation(self, operation: str, status: str, language: Optional[str] = None,
+                     url: Optional[str] = None, message: Optional[str] = None):
         """Log an operation to the database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -260,7 +249,7 @@ class DatabaseManager:
             ''', (conference_url,))
             conn.commit()
     
-    def get_talk_extraction_stats(self) -> dict:
+    def get_talk_extraction_stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         """
         Get statistics about talk URL extraction progress.
         
@@ -311,3 +300,58 @@ class DatabaseManager:
                 }
             
             return stats
+
+    def get_unprocessed_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
+        """
+        Get list of unprocessed talk URLs for a specific language.
+        
+        Args:
+            language: Language code (eng/spa)
+            limit: Maximum number of URLs to return (None for all)
+            
+        Returns:
+            List of unprocessed talk URLs (ordered by most recent first)
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            query = '''
+                SELECT talk_url FROM talk_urls 
+                WHERE language = ? AND processed = FALSE
+                ORDER BY talk_url DESC
+            '''
+            
+            params: List[Union[str, int]] = [language]
+            
+            if limit is not None:
+                query += ' LIMIT ?'
+                params.append(limit)
+            
+            cursor.execute(query, params)
+            return [row[0] for row in cursor.fetchall()]
+
+    def mark_talk_processed(self, talk_url: str, success: bool = True):
+        """
+        Mark a talk URL as processed.
+        
+        Args:
+            talk_url: Talk URL to mark as processed
+            success: Whether the processing was successful
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                UPDATE talk_urls 
+                SET processed = TRUE 
+                WHERE talk_url = ?
+            ''', (talk_url,))
+            
+            # Log the processing result
+            status = 'success' if success else 'failed'
+            cursor.execute('''
+                INSERT INTO processing_log (operation, url, status, message) 
+                VALUES (?, ?, ?, ?)
+            ''', ('talk_content_extraction', talk_url, status, 
+                  'Talk content extraction completed' if success else 'Talk content extraction failed'))
+            
+            conn.commit()
