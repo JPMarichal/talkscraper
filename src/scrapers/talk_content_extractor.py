@@ -374,32 +374,12 @@ class TalkContentExtractor:
             if not p_elem:
                 return ""
             
-            # Convert note references to internal links
-            note_refs = p_elem.find_all('a', class_='note-ref')
-            for note_ref in note_refs:
-                if hasattr(note_ref, 'get') and hasattr(note_ref, 'get_text'):
-                    href = note_ref.get('href', '')
-                    # Extract note ID from href (e.g., "#note1" -> "1")
-                    note_id = href.replace('#', '').replace('note', '') if href else note_ref.get_text(strip=True)
-                    note_text = note_ref.get_text(strip=True)
-                    
-                    # Create a better internal link
-                    if note_id:
-                        new_link = p_copy.new_tag('a', href=f"#note{note_id}", **{'class': 'note-link'})
-                        new_link.string = note_text
-                        note_ref.replace_with(new_link)
-            
-            # Preserve emphasis elements (convert b to strong, i to em)
-            for tag in p_elem.find_all(['b']):
-                if hasattr(tag, 'name'):
-                    tag.name = 'strong'
-            
-            for tag in p_elem.find_all(['i']):
-                if hasattr(tag, 'name'):
-                    tag.name = 'em'
-            
             # Get HTML content without escaping
             content = str(p_elem).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
+            
+            # Remove unnecessary attributes using regex
+            content = re.sub(r' data-aid="[^"]*"', '', content)
+            content = re.sub(r' id="[^"]*"', '', content)
             
             # Clean up whitespace but preserve structure
             content = re.sub(r'\s+', ' ', content)
