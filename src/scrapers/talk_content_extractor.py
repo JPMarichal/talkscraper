@@ -443,9 +443,13 @@ class TalkContentExtractor:
                     inner_html = driver.execute_script("return arguments[0].innerHTML;", element)
                     
                     if inner_html and inner_html.strip():
-                        # Clean the HTML to get text only
+                        # Clean the HTML to get text only with proper spacing
                         soup = BeautifulSoup(inner_html, 'html.parser')
-                        clean_text = soup.get_text(strip=True)
+                        # Use separator to ensure spaces between elements
+                        clean_text = soup.get_text(separator=' ', strip=True)
+                        
+                        # Clean up multiple consecutive spaces but preserve single spaces
+                        clean_text = re.sub(r'\s+', ' ', clean_text).strip()
                         
                         if clean_text and len(clean_text) > 5:
                             notes.append(f"[{note_id}] {clean_text}")
