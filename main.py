@@ -65,6 +65,21 @@ def parse_arguments():
         help="Show processing statistics"
     )
     
+    # Phase 3 specific options
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Limit number of talks to process in Phase 3 (default: all unprocessed)"
+    )
+    
+    parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=3,
+        help="Number of talks to process simultaneously in Phase 3 (default: 3)"
+    )
+    
     return parser.parse_args()
 
 
@@ -143,46 +158,108 @@ def phase_2_talk_extraction(languages, config_path):
         return False
 
 
-def phase_3_content_extraction(languages, config_path):
-    """Execute Phase 3: Complete Content Extraction."""
+def phase_3_content_extraction(config_path, limit=None, batch_size=3):
+    """Execute Phase 3: Complete Content Extraction with optimized quality."""
     print("=== PHASE 3: COMPLETE CONTENT EXTRACTION ===")
-    print(f"Languages: {', '.join(languages)}")
     print(f"Config: {config_path}")
+    if limit:
+        print(f"Limit: {limit} talks")
+    print(f"Batch size: {batch_size} simultaneous talks")
     print()
     
     try:
         extractor = TalkContentExtractor(config_path)
         
-        # Extract content for all specified languages
-        results = {}
-        total_extracted = 0
+        # Get all unprocessed talk URLs from database
+        talk_urls = extractor.get_all_unprocessed_talk_urls()
         
-        for language in languages:
-            print(f"\n🔍 Processing {language.upper()} talks...")
-            
-            # Get unprocessed talk URLs (limit to 10 for testing)
-            talk_urls = extractor.get_unprocessed_talk_urls(language, limit=10)
-            
-            if not talk_urls:
-                print(f"   No unprocessed URLs found for {language}")
-                results[language] = 0
-                continue
-            
-            print(f"   Found {len(talk_urls)} unprocessed talks")
-            
-            # Extract talks in batch
-            stats = extractor.extract_talks_batch(talk_urls)
-            results[language] = stats['saved']
-            total_extracted += stats['saved']
-            
-            print(f"   ✅ {language.upper()}: {stats['saved']}/{stats['total']} talks saved to files")
+        if not talk_urls:
+            print("✅ No unprocessed talk URLs found in database")
+            return True
         
-        print(f"\n🎯 Total talks extracted and saved: {total_extracted}")
+        total_urls = len(talk_urls)
         
-        return True
+        # Apply limit if specified
+        if limit and limit < total_urls:
+            talk_urls = talk_urls[:limit]
+            print(f"� Processing limited set: {len(talk_urls)} of {total_urls} unprocessed talks")
+        else:
+            print(f"📋 Found {total_urls} unprocessed talks for extraction")
+        
+        print(f"🚀 Starting content extraction with optimized processing...")
+        print(f"   • HTML formatting with preserved structure")
+        print(f"   • Functional internal note navigation")
+        print(f"   • Scripture references with proper spacing")
+        print(f"   • Professional responsive CSS styling")
+        print()
+        
+        # Track processing statistics
+        processed_count = 0
+        successful_count = 0
+        saved_files = 0
+        errors = []
+        
+        # Process talks in batches
+        for i in range(0, len(talk_urls), batch_size):
+            batch = talk_urls[i:i + batch_size]
+            batch_num = (i // batch_size) + 1
+            total_batches = (len(talk_urls) + batch_size - 1) // batch_size
+            
+            print(f"📦 Processing batch {batch_num}/{total_batches} ({len(batch)} talks)...")
+            
+            # Extract content for this batch
+            batch_stats = extractor.extract_talks_batch(batch, batch_size=len(batch))
+            
+            # Update statistics
+            processed_count += batch_stats['total']
+            successful_count += batch_stats['successful']
+            saved_files += batch_stats['saved']
+            
+            # Mark URLs as processed in database
+            for j, url in enumerate(batch):
+                try:
+                    success = j < batch_stats['successful']
+                    extractor.mark_talk_processed(url, success)
+                except Exception as e:
+                    errors.append(f"Database update error for {url}: {e}")
+            
+            # Show batch progress
+            success_rate = (batch_stats['successful'] / batch_stats['total'] * 100) if batch_stats['total'] > 0 else 0
+            print(f"   ✅ Batch {batch_num}: {batch_stats['saved']} files saved, {success_rate:.1f}% success rate")
+        
+        # Final summary
+        print(f"\n🎯 EXTRACTION SUMMARY:")
+        print(f"   📁 Total files generated: {saved_files}")
+        print(f"   � Total talks processed: {processed_count}")
+        print(f"   ✅ Successful extractions: {successful_count}")
+        
+        if processed_count > 0:
+            overall_success_rate = (successful_count / processed_count * 100)
+            print(f"   � Overall success rate: {overall_success_rate:.1f}%")
+        
+        # Show errors if any
+        if errors:
+            print(f"\n⚠️  Database update warnings ({len(errors)}):")
+            for error in errors[:5]:  # Show first 5 errors
+                print(f"   • {error}")
+            if len(errors) > 5:
+                print(f"   • ... and {len(errors) - 5} more")
+        
+        # Quality features summary
+        if saved_files > 0:
+            print(f"\n✨ Generated file features:")
+            print(f"   • Professional HTML formatting with preserved structure")
+            print(f"   • Functional internal navigation between content and notes")
+            print(f"   • Scripture references with proper spacing")
+            print(f"   • Responsive CSS styling for all devices")
+            print(f"   • Files saved to conf/[language]/ directories")
+        
+        return saved_files > 0
         
     except Exception as e:
         print(f"❌ Error in Phase 3: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -237,7 +314,10 @@ def main():
     elif args.phase == 2:
         success = phase_2_talk_extraction(args.languages, str(config_path))
     elif args.phase == 3:
-        success = phase_3_content_extraction(args.languages, str(config_path))
+        # Pass the new arguments to phase 3
+        success = phase_3_content_extraction(str(config_path), 
+                                           limit=args.limit, 
+                                           batch_size=args.batch_size)
     
     return 0 if success else 1
 

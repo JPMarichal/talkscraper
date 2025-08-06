@@ -755,6 +755,36 @@ class TalkContentExtractor:
             self.logger.error(f"Error retrieving unprocessed URLs for {language}: {e}")
             return []
     
+    def get_all_unprocessed_talk_urls(self, limit: Optional[int] = None) -> List[str]:
+        """
+        Get list of unprocessed talk URLs from all languages.
+        
+        Args:
+            limit: Maximum number of URLs to return
+            
+        Returns:
+            List of unprocessed talk URLs from all languages
+        """
+        try:
+            all_urls = []
+            for language in ['eng', 'spa']:  # Support both languages
+                try:
+                    urls = self.db.get_unprocessed_talk_urls(language)
+                    all_urls.extend(urls)
+                    self.logger.info(f"Retrieved {len(urls)} unprocessed {language} talk URLs")
+                except Exception as e:
+                    self.logger.warning(f"Error retrieving unprocessed URLs for {language}: {e}")
+            
+            # Apply limit if specified
+            if limit and len(all_urls) > limit:
+                all_urls = all_urls[:limit]
+            
+            self.logger.info(f"Total unprocessed URLs retrieved: {len(all_urls)}")
+            return all_urls
+        except Exception as e:
+            self.logger.error(f"Error retrieving unprocessed URLs: {e}")
+            return []
+    
     def mark_talk_processed(self, url: str, success: bool = True):
         """Mark a talk URL as processed in the database."""
         try:
