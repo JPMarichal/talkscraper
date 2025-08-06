@@ -75,21 +75,80 @@ class TalkContentExtractor:
         log_config = self.config.get_log_config()
         self.logger = setup_logger('TalkContentExtractor', log_config)
         
-        # Session for static content requests
+        # Session for static content requests - optimized for speed
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': self.config.get_user_agent()
+            'User-Agent': self.config.get_user_agent(),
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
         })
         
-        # Chrome options for Selenium (notes extraction)
+        # Connection pooling and timeout optimizations
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=50,
+            pool_maxsize=50,
+            max_retries=2
+        )
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
+        
+        # Chrome options for Selenium (notes extraction) - Optimized for speed
         selenium_config = self.config.get_selenium_config()
         self.chrome_options = Options()
         if selenium_config['headless']:
             self.chrome_options.add_argument('--headless')
+        
+        # Performance optimizations - CPU focused
         self.chrome_options.add_argument('--no-sandbox')
         self.chrome_options.add_argument('--disable-dev-shm-usage')
         self.chrome_options.add_argument('--disable-gpu')
-        self.chrome_options.add_argument('--window-size=1920,1080')
+        self.chrome_options.add_argument('--disable-extensions')
+        self.chrome_options.add_argument('--disable-web-security')
+        self.chrome_options.add_argument('--disable-features=VizDisplayCompositor,TranslateUI,BlinkGenPropertyTrees')
+        self.chrome_options.add_argument('--disable-background-timer-throttling')
+        self.chrome_options.add_argument('--disable-renderer-backgrounding')
+        self.chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+        self.chrome_options.add_argument('--disable-background-networking')
+        self.chrome_options.add_argument('--disable-image-loading')
+        self.chrome_options.add_argument('--disable-plugins')
+        self.chrome_options.add_argument('--disable-default-apps')
+        
+        # CPU optimization specific flags
+        self.chrome_options.add_argument('--disable-javascript-harmony-shipping')
+        self.chrome_options.add_argument('--disable-software-rasterizer')
+        self.chrome_options.add_argument('--disable-background-media-downloads')
+        self.chrome_options.add_argument('--disable-client-side-phishing-detection')
+        self.chrome_options.add_argument('--disable-sync')
+        self.chrome_options.add_argument('--disable-speech-api')
+        
+        self.chrome_options.add_argument('--window-size=600,400')  # Optimized window size
+        self.chrome_options.add_argument('--memory-pressure-off')
+        self.chrome_options.add_argument('--max_old_space_size=512')  # Limit V8 memory
+        self.chrome_options.add_argument('--aggressive-cache-discard')
+        
+        # Disable logging to reduce I/O
+        self.chrome_options.add_argument('--log-level=3')
+        self.chrome_options.add_argument('--silent')
+        
+        # Experimental optimizations
+        self.chrome_options.add_experimental_option('useAutomationExtension', False)
+        self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        
+        # Prefs for faster loading
+        prefs = {
+            "profile.default_content_setting_values": {
+                "images": 2,  # Block images
+                "plugins": 2,  # Block plugins
+                "popups": 2,  # Block popups
+                "geolocation": 2,  # Block location sharing
+                "notifications": 2,  # Block notifications
+                "media_stream": 2,  # Block media stream
+            },
+            "profile.managed_default_content_settings": {
+                "images": 2
+            }
+        }
+        self.chrome_options.add_experimental_option("prefs", prefs)
         
         # Output directory configuration
         self.output_dir = Path('conf')  # Use default conf directory
@@ -159,7 +218,7 @@ class TalkContentExtractor:
             Dictionary with static content or None if extraction fails
         """
         try:
-            response = self.session.get(url, timeout=30)
+            response = self.session.get(url, timeout=15)  # Reduced timeout for speed
             response.raise_for_status()
             
             soup = BeautifulSoup(response.content, 'html.parser')
@@ -436,16 +495,16 @@ class TalkContentExtractor:
             # Load the page
             driver.get(url)
             
-            # Wait for page to load
-            WebDriverWait(driver, 10).until(
+            # Wait for page to load - reduced timeout for speed
+            WebDriverWait(driver, 5).until(
                 EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
             
             # Try to activate "Related Content" button
             self._activate_related_content(driver)
             
-            # Wait a bit for content to load
-            time.sleep(3)
+            # Reduced wait time for faster processing
+            time.sleep(1.5)
             
             # Extract notes from li elements with id starting with "note"
             note_elements = driver.find_elements(By.CSS_SELECTOR, 'li[id^="note"]')
@@ -697,18 +756,19 @@ class TalkContentExtractor:
         
         return '\n'.join(formatted_paragraphs)
     
-    def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 12) -> Dict[str, int]:
+    def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 24) -> Dict[str, int]:
         """
         Extract multiple talks in parallel batches using ThreadPoolExecutor.
+        Optimized for maximum performance.
         
         Args:
             talk_urls: List of talk URLs to extract
-            batch_size: Number of talks to process concurrently (default: 12 for 64GB RAM)
+            batch_size: Number of talks to process concurrently (default: 24 for 64GB RAM)
             
         Returns:
             Dictionary with extraction statistics
         """
-        self.logger.info(f"Starting concurrent extraction of {len(talk_urls)} talks with {batch_size} threads")
+        self.logger.info(f"Starting OPTIMIZED concurrent extraction of {len(talk_urls)} talks with {batch_size} threads")
         
         stats = {
             'total': len(talk_urls),
@@ -720,14 +780,14 @@ class TalkContentExtractor:
         # Thread-safe counters
         stats_lock = Lock()
         
-        def extract_single_talk(url: str) -> Optional[Tuple[str, bool, bool]]:
-            """Extract a single talk and return results."""
+        def extract_single_talk_optimized(url: str) -> Optional[Tuple[str, bool, bool]]:
+            """Extract a single talk and return results - optimized version."""
             try:
                 # Extract complete talk data
                 talk_data = self.extract_complete_talk(url)
                 
                 if talk_data:
-                    # Save to file
+                    # Save to file immediately in the same thread
                     saved_path = self.save_talk_to_file(talk_data)
                     saved = bool(saved_path)
                     return (url, True, saved)
@@ -735,24 +795,24 @@ class TalkContentExtractor:
                     return (url, False, False)
                     
             except Exception as e:
-                self.logger.error(f"Error processing {url}: {e}")
+                self.logger.warning(f"Error processing {url}: {e}")  # Changed to warning for speed
                 return (url, False, False)
         
-        # Process talks in parallel
-        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="TalkExtractor") as executor:
-            # Submit all jobs
-            future_to_url = {executor.submit(extract_single_talk, url): url for url in talk_urls}
+        # Process talks in parallel with optimized thread pool
+        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="OptimizedTalkExtractor") as executor:
+            # Submit all jobs at once for better scheduling
+            future_to_url = {executor.submit(extract_single_talk_optimized, url): url for url in talk_urls}
             
-            # Process completed futures with progress bar
-            with tqdm(total=len(talk_urls), desc="Extracting talks", unit="talk") as pbar:
+            # Process completed futures with faster progress updates
+            with tqdm(total=len(talk_urls), desc="Extracting talks", unit="talk", mininterval=0.1) as pbar:
                 for future in as_completed(future_to_url):
                     url = future_to_url[future]
                     try:
-                        result = future.result()
+                        result = future.result(timeout=30)  # Add timeout to prevent hanging
                         if result:
                             _, success, saved = result
                             
-                            # Update stats thread-safely
+                            # Update stats thread-safely with minimal locking
                             with stats_lock:
                                 if success:
                                     stats['successful'] += 1
@@ -761,23 +821,26 @@ class TalkContentExtractor:
                                 else:
                                     stats['failed'] += 1
                             
-                            # Update progress bar
-                            pbar.set_postfix({
-                                'success': f"{stats['successful']}/{stats['total']}",
-                                'failed': stats['failed'],
-                                'saved': stats['saved']
-                            })
+                            # Less frequent progress bar updates for performance
+                            if stats['successful'] % 5 == 0 or not success:
+                                pbar.set_postfix({
+                                    'success': f"{stats['successful']}/{stats['total']}",
+                                    'failed': stats['failed'],
+                                    'saved': stats['saved']
+                                })
                         else:
                             with stats_lock:
                                 stats['failed'] += 1
                                 
                     except Exception as e:
-                        self.logger.error(f"Future exception for {url}: {e}")
+                        self.logger.warning(f"Future timeout/exception for {url}: {e}")  # Warning instead of error
                         with stats_lock:
                             stats['failed'] += 1
                     
                     pbar.update(1)
         
+        self.logger.info(f"OPTIMIZED concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
+        return stats
         self.logger.info(f"Concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
         return stats
     
