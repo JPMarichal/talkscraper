@@ -374,6 +374,24 @@ class TalkContentExtractor:
             if not p_elem:
                 return ""
             
+            # Remove all links except note references (preserve text content)
+            for link in p_elem.find_all('a'):
+                href = link.get('href', '')
+                class_attr = link.get('class', [])
+                
+                # Keep note reference links
+                if 'note-ref' in class_attr or '#note' in href:
+                    # Convert to our internal note link format
+                    note_match = re.search(r'#note(\d+)', href)
+                    if note_match:
+                        note_id = note_match.group(1)
+                        link['href'] = f"#note{note_id}"
+                        link['class'] = 'note-link'
+                    continue
+                
+                # For all other links, replace with just the text content
+                link.replace_with(link.get_text())
+            
             # Get HTML content without escaping
             content = str(p_elem).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
             
@@ -381,11 +399,6 @@ class TalkContentExtractor:
             content = re.sub(r' data-aid="[^"]*"', '', content)
             content = re.sub(r' id="[^"]*"', '', content)
             content = re.sub(r' data-scroll-id="[^"]*"', '', content)
-            
-            # Fix note references to point to our own footnotes
-            # Convert href="/study/...#note1" to href="#note1" and change class
-            content = re.sub(r'class="note-ref"', 'class="note-link"', content)
-            content = re.sub(r'href="[^"]*#note(\d+)"', r'href="#note\1"', content)
             
             # Ensure note superscripts are visible by adding text content
             # Fix <sup class="marker" data-value="X"></sup> to <sup>X</sup>

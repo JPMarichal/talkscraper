@@ -163,7 +163,7 @@ def generate_improved_html(title, author, calling, content, notes, url):
         }}
         .notes h2 {{
             color: #2c3e50;
-            margin-bottom: 15px;
+            margin-bottom: 15x;
         }}
         .notes ol {{
             padding-left: 20px;
@@ -251,3 +251,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+p
