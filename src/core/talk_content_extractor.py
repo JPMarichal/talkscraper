@@ -201,6 +201,7 @@ class TalkContentExtractor:
             )
             
             self.logger.info(f"Successfully extracted complete talk: '{complete_data.title}' by {complete_data.author} ({complete_data.note_count} notes)")
+            self._backup_talk_metadata(complete_data)
             return complete_data
             
         except Exception as e:
@@ -900,9 +901,59 @@ class TalkContentExtractor:
         except Exception as e:
             self.logger.error(f"Error marking {url} as processed: {e}")
     
-    def __del__(self):
-        """Cleanup resources."""
-        if hasattr(self, 'session'):
-            self.session.close()
+    def _normalize_author(self, author: str) -> str:
+        """Remove common prefixes from author name."""
+        return re.sub(r'^(Elder|Hermana|Presidente|President|Sister|Brother)\s+', '', author, flags=re.IGNORECASE).strip()
+
+    def _backup_talk_metadata(self, talk_data: CompleteTalkData):
+        """Save metadata (title, author, calling, note_count) to the database."""
+        try:
+            clean_author = self._normalize_author(talk_data.author)
+            self.db.store_talk_metadata(
+                url=talk_data.url,
+                title=talk_data.title,
+                author=clean_author,
+                calling=talk_data.calling,
+                note_count=talk_data.note_count,
+                language=talk_data.language,
+                year=talk_data.year,
+                conference_session=talk_data.conference_session
+            )
+            self.logger.info(f"Metadata backed up for: {talk_data.title}")
+        except Exception as e:
+            self.logger.error(f"Error backing up metadata for {talk_data.url}: {e}")
+
+    def backup_existing_html_metadata(self):
+        """Scan saved HTML files and backup metadata to the database."""
+        for language in ['eng', 'spa']:
+            lang_dir = self.output_dir / language
+            for html_file in lang_dir.rglob('*.html'):
+                try:
+                    with open(html_file, 'r', encoding='utf-8') as f:
+                        soup = BeautifulSoup(f, 'html.parser')
+                        title = soup.find('h1').get_text(strip=True)
+                        author = soup.find(class_='author').get_text(strip=True)
+                        calling = soup.find(class_='calling').get_text(strip=True)
+                        note_count = len(soup.select('.notes li'))
+                        url_tag = soup.find('a', href=True)
+                        url = url_tag['href'] if url_tag else ''
+                        year = html_file.parent.name[:4]
+                        conference_session = html_file.parent.name
+                        talk_data = CompleteTalkData(
+                            title=title,
+                            author=author,
+                            calling=calling,
+                            content='',
+                            notes=[],
+                            url=url,
+                            language=language,
+                            year=year,
+                            conference_session=conference_session,
+                            extraction_timestamp='',
+                            note_count=note_count
+                        )
+                        self._backup_talk_metadata(talk_data)
+                except Exception as e:
+                    self.logger.warning(f"Error processing {html_file}: {e}")
         if hasattr(self, 'db'):
             self.db.close()

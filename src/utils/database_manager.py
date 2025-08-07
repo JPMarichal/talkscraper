@@ -68,6 +68,23 @@ class DatabaseManager:
                 )
             ''')
             
+            # Talk metadata table
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS talk_metadata (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    url TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    author TEXT NOT NULL,
+                    calling TEXT,
+                    note_count INTEGER,
+                    language TEXT,
+                    year TEXT,
+                    conference_session TEXT,
+                    backup_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(url)
+                )
+            ''')
+            
             conn.commit()
             self.logger.info("Database initialized successfully")
     
@@ -163,6 +180,23 @@ class DatabaseManager:
             conn.commit()
         
         return stored_count
+    
+    def store_talk_metadata(self, url: str, title: str, author: str, calling: str, note_count: int, language: str, year: str, conference_session: str):
+        """
+        Store talk metadata (without content/notes) in the database.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute('''
+                    INSERT OR REPLACE INTO talk_metadata 
+                    (url, title, author, calling, note_count, language, year, conference_session)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (url, title, author, calling, note_count, language, year, conference_session))
+                conn.commit()
+                self.logger.info(f"Talk metadata stored for {title} [{url}]")
+            except sqlite3.Error as e:
+                self.logger.error(f"Error storing talk metadata for {url}: {e}")
     
     def get_processing_stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         """Get processing statistics."""
