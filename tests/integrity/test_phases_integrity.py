@@ -13,8 +13,8 @@ import sqlite3
 from pathlib import Path
 from unittest.mock import patch, Mock
 
-from scrapers.url_collector import URLCollector
-from scrapers.talk_url_extractor import TalkURLExtractor
+from core.url_collector import URLCollector
+from core.talk_url_extractor import TalkURLExtractor
 from utils.config_manager import ConfigManager
 from utils.database_manager import DatabaseManager
 

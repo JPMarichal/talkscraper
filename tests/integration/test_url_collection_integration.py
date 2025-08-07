@@ -9,7 +9,7 @@ import pytest
 import responses
 from unittest.mock import patch, Mock
 
-from scrapers.url_collector import URLCollector
+from core.url_collector import URLCollector
 
 
 class TestURLCollectorIntegration:

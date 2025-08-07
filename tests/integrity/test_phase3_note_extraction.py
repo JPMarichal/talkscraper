@@ -15,8 +15,33 @@ from pathlib import Path
 # Add the project root to Python path to import existing note extraction code
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
+src_path = project_root / "src"
+sys.path.append(str(src_path))
 
-from extract_notes_final import extract_notes_with_selenium_final, extract_talk_content_static
+from core.talk_content_extractor import TalkContentExtractor
+from utils.config_manager import ConfigManager
+
+
+def extract_notes_with_selenium_final(url: str) -> List[str]:
+    """
+    Wrapper function to extract notes using TalkContentExtractor.
+    
+    This replaces the eliminated extract_notes_final module functionality.
+    """
+    config_path = "config.ini"
+    extractor = TalkContentExtractor(config_path)
+    return extractor._extract_notes_selenium(url) or []
+
+
+def extract_talk_content_static(url: str) -> Dict[str, str]:
+    """
+    Wrapper function to extract static content using TalkContentExtractor.
+    
+    This replaces the eliminated extract_notes_final module functionality.
+    """
+    config_path = "config.ini"
+    extractor = TalkContentExtractor(config_path)
+    return extractor._extract_static_content(url) or {}
 
 
 @pytest.mark.integrity
