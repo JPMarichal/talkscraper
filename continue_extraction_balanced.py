@@ -27,10 +27,10 @@ from utils.config_manager import ConfigManager
 from utils.logger_setup import setup_logger
 
 
-def get_completed_periods() -> Set[str]:
+def get_completed_periods(language: str = 'eng') -> Set[str]:
     """Detectar períodos ya completados basándose en estructura de archivos."""
     completed = set()
-    conf_dir = Path('conf/eng')
+    conf_dir = Path(f'conf/{language}')
     
     if not conf_dir.exists():
         return completed
@@ -138,6 +138,8 @@ def main():
     
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Continuación EQUILIBRADA con control de CPU')
+    parser.add_argument('--language', choices=['eng', 'spa'], default='eng',
+                       help='Idioma a procesar (default: eng)')
     parser.add_argument('--batch-size', type=int, default=16,
                        help='Hilos concurrentes (default: 16 - equilibrado)')
     parser.add_argument('--config', default='config.ini',
@@ -167,8 +169,8 @@ def main():
         logger.info(f"📊 Recursos iniciales: CPU {cpu_percent:.1f}%, RAM {ram_percent:.1f}%")
         
         # Detectar períodos completados
-        logger.info("📁 Analizando períodos ya procesados...")
-        completed_periods = get_completed_periods()
+        logger.info(f"📁 Analizando períodos ya procesados para idioma: {args.language}...")
+        completed_periods = get_completed_periods(args.language)
         logger.info(f"📁 Encontrados {len(completed_periods)} períodos ya procesados")
         
         if completed_periods:
@@ -176,9 +178,9 @@ def main():
             logger.info(f"   Último período completo: {sorted_periods[0]}")
         
         # Obtener URLs de la base de datos
-        logger.info(f"\n📊 Obteniendo URLs completas de la base de datos...")
+        logger.info(f"\n📊 Obteniendo URLs completas de la base de datos para idioma: {args.language}...")
         extractor = TalkContentExtractor(args.config)
-        all_talk_urls = extractor.get_unprocessed_talk_urls('eng', None)
+        all_talk_urls = extractor.get_unprocessed_talk_urls(args.language, None)
         logger.info(f"📋 URLs totales en base de datos: {len(all_talk_urls)}")
         
         # Filtrar URLs realmente no procesadas
