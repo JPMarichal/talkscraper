@@ -120,12 +120,17 @@ class URLCollector:
         decade_urls = []
         language = 'eng' if 'lang=eng' in base_url else 'spa'
         
-        # Páginas de décadas conocidas
+        # Get base domain from config
+        from urllib.parse import urlparse
+        parsed_base = urlparse(base_url)
+        base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
+        
+        # Páginas de décadas conocidas - usar dominio de configuración
         decade_pages = [
-            f"https://www.churchofjesuschrist.org/study/general-conference/20102019?lang={language}",
-            f"https://www.churchofjesuschrist.org/study/general-conference/20002009?lang={language}",
-            f"https://www.churchofjesuschrist.org/study/general-conference/19901999?lang={language}",
-            f"https://www.churchofjesuschrist.org/study/general-conference/19801989?lang={language}"
+            f"{base_domain}/study/general-conference/20102019?lang={language}",
+            f"{base_domain}/study/general-conference/20002009?lang={language}",
+            f"{base_domain}/study/general-conference/19901999?lang={language}",
+            f"{base_domain}/study/general-conference/19801989?lang={language}"
         ]
         
         # Extraer URLs de páginas de décadas
@@ -165,9 +170,15 @@ class URLCollector:
         
         individual_urls = []
         
+        # Get base domain from config for current language
+        base_url = self.config.get_base_url(language)
+        from urllib.parse import urlparse
+        parsed_base = urlparse(base_url)
+        base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
+        
         for year in range(1971, 1980):  # 1971-1979
             for session in ['04', '10']:  # Abril y Octubre
-                url = f"https://www.churchofjesuschrist.org/study/general-conference/{year}/{session}?lang={language}"
+                url = f"{base_domain}/study/general-conference/{year}/{session}?lang={language}"
                 
                 try:
                     response = self.session.get(url, timeout=30)

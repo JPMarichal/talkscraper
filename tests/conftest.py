@@ -181,6 +181,59 @@ def mock_requests():
 
 
 @pytest.fixture
+def comprehensive_mock_requests(mock_requests, sample_html_main_page, sample_html_conference):
+    """Set up comprehensive mocks for all URLs that URLCollector might access."""
+    
+    # Configure mock to not require all requests to be fired
+    mock_requests.assert_all_requests_are_fired = False
+    
+    # Mock main pages
+    mock_requests.add(
+        responses.GET,
+        'https://test.example.com/eng',
+        body=sample_html_main_page,
+        status=200
+    )
+    mock_requests.add(
+        responses.GET,
+        'https://test.example.com/spa',
+        body=sample_html_main_page,
+        status=200
+    )
+    
+    # Mock decade pages for both languages
+    for lang in ['eng', 'spa']:
+        decade_pages = [
+            f'https://test.example.com/study/general-conference/20102019?lang={lang}',
+            f'https://test.example.com/study/general-conference/20002009?lang={lang}',
+            f'https://test.example.com/study/general-conference/19901999?lang={lang}',
+            f'https://test.example.com/study/general-conference/19801989?lang={lang}'
+        ]
+        
+        for page_url in decade_pages:
+            mock_requests.add(
+                responses.GET,
+                page_url,
+                body=sample_html_conference,
+                status=200
+            )
+    
+    # Mock individual year pages (1971-1979) for both languages
+    for lang in ['eng', 'spa']:
+        for year in range(1971, 1980):
+            for session in ['04', '10']:
+                year_url = f'https://test.example.com/study/general-conference/{year}/{session}?lang={lang}'
+                mock_requests.add(
+                    responses.GET,
+                    year_url,
+                    body=sample_html_conference,
+                    status=200
+                )
+    
+    return mock_requests
+
+
+@pytest.fixture
 def sample_html_conference():
     """Return sample HTML content for a conference page."""
     return '''

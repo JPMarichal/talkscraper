@@ -17,23 +17,9 @@ class TestURLCollectorIntegration:
     
     @pytest.mark.integration
     @pytest.mark.network
-    def test_collect_all_urls_success(self, test_config_file, mock_requests, 
+    def test_collect_all_urls_success(self, test_config_file, comprehensive_mock_requests, 
                                      sample_html_main_page):
         """Test successful collection of URLs for all languages."""
-        # Setup mock responses
-        mock_requests.add(
-            responses.GET,
-            'https://test.example.com/eng',
-            body=sample_html_main_page,
-            status=200
-        )
-        mock_requests.add(
-            responses.GET,
-            'https://test.example.com/spa',
-            body=sample_html_main_page,
-            status=200
-        )
-        
         collector = URLCollector(test_config_file)
         results = collector.collect_all_urls(['eng', 'spa'])
         
@@ -44,16 +30,9 @@ class TestURLCollectorIntegration:
         
     @pytest.mark.integration
     @pytest.mark.network
-    def test_collect_single_language_urls(self, test_config_file, mock_requests,
+    def test_collect_single_language_urls(self, test_config_file, comprehensive_mock_requests,
                                          sample_html_main_page):
         """Test collection of URLs for a single language."""
-        mock_requests.add(
-            responses.GET,
-            'https://test.example.com/eng',
-            body=sample_html_main_page,
-            status=200
-        )
-        
         collector = URLCollector(test_config_file)
         results = collector.collect_all_urls(['eng'])
         

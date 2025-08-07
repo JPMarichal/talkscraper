@@ -342,12 +342,12 @@ class TestCrossPhaseIntegrity:
         # Test Phase 1 logging
         collector = URLCollector(test_config_file)
         assert collector.logger is not None
-        assert collector.logger.name == 'scrapers.url_collector'
+        assert collector.logger.name == 'core.url_collector'
         
         # Test Phase 2 logging
         extractor = TalkURLExtractor(test_config_file)
         assert extractor.logger is not None
-        assert extractor.logger.name == 'scrapers.talk_url_extractor'
+        assert extractor.logger.name == 'core.talk_url_extractor'
         
         # Test that log configuration is consistent
         log_config1 = collector.config.get_log_config()
