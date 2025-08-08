@@ -51,6 +51,10 @@ class DatabaseManager:
                     language TEXT NOT NULL,
                     discovered_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     processed BOOLEAN DEFAULT FALSE,
+                    title TEXT,
+                    author TEXT,
+                    calling TEXT,
+                    conference TEXT,
                     UNIQUE(conference_url, talk_url)
                 )
             ''')
@@ -363,6 +367,43 @@ class DatabaseManager:
             
             cursor.execute(query, params)
             return [row[0] for row in cursor.fetchall()]
+
+    def update_talk_metadata(self, talk_url: str, title: str = None, author: str = None, calling: str = None, conference: str = None):
+        """
+        Update metadata fields for a talk URL.
+        
+        Args:
+            talk_url: Talk URL to update
+            title: Talk title
+            author: Talk author
+            calling: Author's calling/position
+            conference: Conference session (e.g., "2024-04")
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            # Build dynamic UPDATE query based on provided parameters
+            updates = []
+            params = []
+            
+            if title is not None:
+                updates.append("title = ?")
+                params.append(title)
+            if author is not None:
+                updates.append("author = ?")
+                params.append(author)
+            if calling is not None:
+                updates.append("calling = ?")
+                params.append(calling)
+            if conference is not None:
+                updates.append("conference = ?")
+                params.append(conference)
+            
+            if updates:
+                params.append(talk_url)
+                query = f"UPDATE talk_urls SET {', '.join(updates)} WHERE talk_url = ?"
+                cursor.execute(query, params)
+                conn.commit()
 
     def mark_talk_processed(self, talk_url: str, success: bool = True):
         """

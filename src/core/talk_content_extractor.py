@@ -775,7 +775,8 @@ class TalkContentExtractor:
             'total': len(talk_urls),
             'successful': 0,
             'failed': 0,
-            'saved': 0
+            'saved': 0,
+            'marked_processed': 0
         }
         
         # Thread-safe counters
@@ -791,12 +792,33 @@ class TalkContentExtractor:
                     # Save to file immediately in the same thread
                     saved_path = self.save_talk_to_file(talk_data)
                     saved = bool(saved_path)
+                    
+                    # Mark as processed in database if successfully saved
+                    if saved:
+                        try:
+                            self.mark_talk_processed(url, success=True)
+                            # Note: stats['marked_processed'] will be updated in the main loop
+                        except Exception as db_e:
+                            self.logger.warning(f"Error marking {url} as processed: {db_e}")
+                    
                     return (url, True, saved)
                 else:
+                    # Mark as processed even if extraction failed to avoid retry loops
+                    try:
+                        self.mark_talk_processed(url, success=False)
+                        # Note: stats['marked_processed'] will be updated in the main loop
+                    except Exception as db_e:
+                        self.logger.warning(f"Error marking failed {url} as processed: {db_e}")
                     return (url, False, False)
                     
             except Exception as e:
                 self.logger.warning(f"Error processing {url}: {e}")  # Changed to warning for speed
+                # Mark as processed even on exception to avoid retry loops
+                try:
+                    self.mark_talk_processed(url, success=False)
+                    # Note: stats['marked_processed'] will be updated in the main loop
+                except Exception as db_e:
+                    self.logger.warning(f"Error marking exception {url} as processed: {db_e}")
                 return (url, False, False)
         
         # Process talks in parallel with optimized thread pool
@@ -821,28 +843,31 @@ class TalkContentExtractor:
                                         stats['saved'] += 1
                                 else:
                                     stats['failed'] += 1
+                                # Always increment marked_processed since we mark all URLs as processed
+                                stats['marked_processed'] += 1
                             
                             # Less frequent progress bar updates for performance
                             if stats['successful'] % 5 == 0 or not success:
                                 pbar.set_postfix({
                                     'success': f"{stats['successful']}/{stats['total']}",
                                     'failed': stats['failed'],
-                                    'saved': stats['saved']
+                                    'saved': stats['saved'],
+                                    'marked': stats['marked_processed']
                                 })
                         else:
                             with stats_lock:
                                 stats['failed'] += 1
+                                stats['marked_processed'] += 1
                                 
                     except Exception as e:
                         self.logger.warning(f"Future timeout/exception for {url}: {e}")  # Warning instead of error
                         with stats_lock:
                             stats['failed'] += 1
+                            stats['marked_processed'] += 1
                     
                     pbar.update(1)
         
-        self.logger.info(f"OPTIMIZED concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
-        return stats
-        self.logger.info(f"Concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files")
+        self.logger.info(f"OPTIMIZED concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files, {stats['marked_processed']} marked as processed")
         return stats
     
     def get_unprocessed_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
@@ -909,15 +934,13 @@ class TalkContentExtractor:
         """Save metadata (title, author, calling, note_count) to the database."""
         try:
             clean_author = self._normalize_author(talk_data.author)
-            self.db.store_talk_metadata(
-                url=talk_data.url,
+            # Update metadata in talk_urls table using the update method
+            self.db.update_talk_metadata(
+                talk_url=talk_data.url,
                 title=talk_data.title,
                 author=clean_author,
                 calling=talk_data.calling,
-                note_count=talk_data.note_count,
-                language=talk_data.language,
-                year=talk_data.year,
-                conference_session=talk_data.conference_session
+                conference=talk_data.conference_session
             )
             self.logger.info(f"Metadata backed up for: {talk_data.title}")
         except Exception as e:
