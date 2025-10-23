@@ -125,12 +125,23 @@ class URLCollector:
         parsed_base = urlparse(base_url)
         base_domain = f"{parsed_base.scheme}://{parsed_base.netloc}"
         
-        # Páginas de décadas conocidas - usar dominio de configuración
+        available_decades = {
+            'eng': [
+                "20102019",
+                "20002009",
+                "19901999",
+                "19801989"
+            ],
+            'spa': [
+                "20102019",
+                "20002009",
+                "19901999"
+            ]
+        }
+        decade_segments = available_decades.get(language, [])
         decade_pages = [
-            f"{base_domain}/study/general-conference/20102019?lang={language}",
-            f"{base_domain}/study/general-conference/20002009?lang={language}",
-            f"{base_domain}/study/general-conference/19901999?lang={language}",
-            f"{base_domain}/study/general-conference/19801989?lang={language}"
+            f"{base_domain}/study/general-conference/{segment}?lang={language}"
+            for segment in decade_segments
         ]
         
         # Extraer URLs de páginas de décadas
@@ -158,8 +169,11 @@ class URLCollector:
                 self.logger.error(f"Error processing decade page {decade_url}: {e}")
         
         # Agregar URLs individuales para años 1971-1979
-        individual_urls = self._extract_individual_year_urls(language)
-        decade_urls.extend(individual_urls)
+        if language == 'eng':
+            individual_urls = self._extract_individual_year_urls(language)
+            decade_urls.extend(individual_urls)
+        else:
+            self.logger.info(f"Skipping individual year URLs for language: {language}")
         
         self.logger.info(f"Total decade archive URLs extracted: {len(decade_urls)}")
         return decade_urls
