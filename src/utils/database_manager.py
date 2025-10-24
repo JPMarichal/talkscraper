@@ -312,6 +312,67 @@ class DatabaseManager:
             'recent_failures': recent_failures
         }
     
+    def get_metadata_summary(self) -> Dict[str, Any]:
+        """Return aggregated metadata summaries useful for reporting."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT language,
+                       COUNT(*) as talks,
+                       COUNT(DISTINCT conference_session) as conferences
+                FROM talk_metadata
+                GROUP BY language
+            ''')
+            by_language = [
+                {
+                    'language': row[0],
+                    'talks': row[1] or 0,
+                    'conferences': row[2] or 0
+                }
+                for row in cursor.fetchall()
+            ]
+
+            cursor.execute('''
+                SELECT conference_session,
+                       language,
+                       COUNT(*) as talks
+                FROM talk_metadata
+                WHERE conference_session IS NOT NULL
+                GROUP BY conference_session, language
+                ORDER BY conference_session DESC, language
+            ''')
+            by_conference = [
+                {
+                    'conference_session': row[0],
+                    'language': row[1],
+                    'talks': row[2] or 0
+                }
+                for row in cursor.fetchall()
+            ]
+
+            cursor.execute('''
+                SELECT author,
+                       COUNT(*) as talks
+                FROM talk_metadata
+                GROUP BY author
+                ORDER BY talks DESC, author ASC
+                LIMIT 20
+            ''')
+            top_authors = [
+                {
+                    'author': row[0],
+                    'talks': row[1] or 0
+                }
+                for row in cursor.fetchall()
+            ]
+
+        return {
+            'by_language': by_language,
+            'by_conference': by_conference,
+            'top_authors': top_authors
+        }
+    
     def log_operation(self, operation: str, status: str, language: Optional[str] = None,
                      url: Optional[str] = None, message: Optional[str] = None):
         """Log an operation to the database."""

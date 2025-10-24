@@ -6,6 +6,7 @@ TalkScraper operations using the Command pattern.
 """
 
 import argparse
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from patterns.command_pattern import (
@@ -14,6 +15,8 @@ from patterns.command_pattern import (
     ContentExtractionCommand,
     CommandInvoker
 )
+
+from scripts.generate_reports import generate_reports
 
 
 class CLICommands:
@@ -163,6 +166,16 @@ class CLICommands:
         """Get command execution history."""
         return self.invoker.get_history()
 
+    def generate_reports(self, output_dir: Optional[str] = None) -> bool:
+        """Generate HTML/CSV reports from metadata."""
+        try:
+            output_dir = output_dir or "reports"
+            generate_reports(self.config_path, Path(output_dir))
+            return True
+        except Exception as e:
+            print(f"❌ Error generating reports: {e}")
+            return False
+
 
 def create_cli_parser() -> argparse.ArgumentParser:
     """Create the main CLI argument parser."""
@@ -175,6 +188,7 @@ Examples:
   %(prog)s extract-talks --languages eng
   %(prog)s extract-content --limit 100 --batch-size 8
   %(prog)s stats
+  %(prog)s reports --output-dir reports/latest
         """
     )
     
@@ -256,5 +270,16 @@ Examples:
         "stats",
         help="Show processing statistics"
     )
-    
+
+    reports_parser = subparsers.add_parser(
+        "reports",
+        help="Generate HTML/CSV reports"
+    )
+    reports_parser.add_argument(
+        "--output-dir",
+        type=str,
+        default="reports",
+        help="Directory where reports will be stored (default: reports)"
+    )
+
     return parser

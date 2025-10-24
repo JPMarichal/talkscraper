@@ -51,6 +51,10 @@ def main():
     elif args.command == "stats":
         success = cli.show_statistics()
     
+    elif args.command == "reports":
+        output_dir = getattr(args, "output_dir", None)
+        success = cli.generate_reports(output_dir)
+
     else:
         parser.print_help()
         return 1
