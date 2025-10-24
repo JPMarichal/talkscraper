@@ -101,6 +101,7 @@ class CLICommands:
             
             stats = db.get_processing_stats()
             log_summary = db.get_processing_log_summary()
+            alert_cfg = config.get_alert_config()
 
             print("📊 TalkScraper Statistics")
             print("=" * 60)
@@ -139,8 +140,9 @@ class CLICommands:
 
             print("\nProcessing log")
             print("-" * 60)
-            if log_summary['status_counts']:
-                for status, count in log_summary['status_counts'].items():
+            status_counts = log_summary['status_counts']
+            if status_counts:
+                for status, count in status_counts.items():
                     print(f" {status:>8}: {count}")
             else:
                 print(" No hay entradas en `processing_log`.")
@@ -155,6 +157,35 @@ class CLICommands:
                         print(f"   ↳ {failure['message']}")
             else:
                 print("\nNo se registran fallos recientes.")
+
+            # Alert evaluation
+            alerts_triggered = []
+            success_count = status_counts.get('success', 0)
+            failed_count = status_counts.get('failed', 0)
+            retry_count = status_counts.get('retry', 0)
+
+            total_fail_eval = success_count + failed_count
+            if total_fail_eval > 0:
+                failure_ratio = failed_count / total_fail_eval
+                if failure_ratio >= alert_cfg['failure_threshold']:
+                    alerts_triggered.append(
+                        f"Ratio de fallos {failure_ratio:.0%} (umbral {alert_cfg['failure_threshold']:.0%})"
+                    )
+
+            total_retry_eval = success_count + retry_count
+            if total_retry_eval > 0:
+                retry_ratio = retry_count / total_retry_eval
+                if retry_ratio >= alert_cfg['retry_threshold']:
+                    alerts_triggered.append(
+                        f"Ratio de reintentos {retry_ratio:.0%} (umbral {alert_cfg['retry_threshold']:.0%})"
+                    )
+
+            if alerts_triggered:
+                print("\n⚠️  Alertas:")
+                for message in alerts_triggered:
+                    print(f" - {message}")
+                if alert_cfg['notify_on_failure'] and alert_cfg['channel']:
+                    print(f"   (Se enviaría notificación a {alert_cfg['channel']})")
             
             return True
             
@@ -169,8 +200,11 @@ class CLICommands:
     def generate_reports(self, output_dir: Optional[str] = None) -> bool:
         """Generate HTML/CSV reports from metadata."""
         try:
-            output_dir = output_dir or "reports"
-            generate_reports(self.config_path, Path(output_dir))
+            if output_dir:
+                target = Path(output_dir)
+            else:
+                target = None
+            generate_reports(self.config_path, target)
             return True
         except Exception as e:
             print(f"❌ Error generating reports: {e}")

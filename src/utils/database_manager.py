@@ -312,8 +312,10 @@ class DatabaseManager:
             'recent_failures': recent_failures
         }
     
-    def get_metadata_summary(self) -> Dict[str, Any]:
+    def get_metadata_summary(self, top_authors_limit: int = 20) -> Dict[str, Any]:
         """Return aggregated metadata summaries useful for reporting."""
+        if top_authors_limit <= 0:
+            top_authors_limit = 1
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
 
@@ -357,8 +359,8 @@ class DatabaseManager:
                 FROM talk_metadata
                 GROUP BY author
                 ORDER BY talks DESC, author ASC
-                LIMIT 20
-            ''')
+                LIMIT ?
+            ''', (top_authors_limit,))
             top_authors = [
                 {
                     'author': row[0],

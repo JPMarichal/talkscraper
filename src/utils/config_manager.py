@@ -109,3 +109,25 @@ class ConfigManager:
             'implicit_wait': self.config.getint('SCRAPING', 'selenium_implicit_wait'),
             'headless': self.config.getboolean('SCRAPING', 'selenium_headless')
         }
+
+    def get_reporting_config(self) -> Dict[str, Any]:
+        """Get reporting configuration values."""
+        output_dir = self.config.get('REPORTING', 'output_dir', fallback='reports')
+        top_authors_limit = self.config.getint('REPORTING', 'top_authors_limit', fallback=20)
+        return {
+            'output_dir': output_dir,
+            'top_authors_limit': top_authors_limit
+        }
+
+    def get_alert_config(self) -> Dict[str, Any]:
+        """Get alert configuration thresholds and options."""
+        failure_threshold = self.config.getfloat('ALERTS', 'failure_threshold', fallback=0.2)
+        retry_threshold = self.config.getfloat('ALERTS', 'retry_threshold', fallback=0.3)
+        notify_on_failure = self.config.getboolean('ALERTS', 'notify_on_failure', fallback=False)
+        channel = self.config.get('ALERTS', 'channel', fallback='')
+        return {
+            'failure_threshold': failure_threshold,
+            'retry_threshold': retry_threshold,
+            'notify_on_failure': notify_on_failure,
+            'channel': channel
+        }
