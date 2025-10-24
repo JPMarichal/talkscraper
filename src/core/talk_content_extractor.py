@@ -958,6 +958,17 @@ class TalkContentExtractor:
                 calling=talk_data.calling,
                 conference=talk_data.conference_session
             )
+            # Store metadata snapshot in talk_metadata table
+            self.db.store_talk_metadata(
+                url=talk_data.url,
+                title=talk_data.title,
+                author=clean_author,
+                calling=talk_data.calling,
+                note_count=talk_data.note_count,
+                language=talk_data.language,
+                year=talk_data.year,
+                conference_session=talk_data.conference_session
+            )
             self.logger.info(f"Metadata backed up for: {talk_data.title}")
         except Exception as e:
             self.logger.error(f"Error backing up metadata for {talk_data.url}: {e}")
