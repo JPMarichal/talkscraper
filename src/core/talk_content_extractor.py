@@ -61,7 +61,7 @@ class TalkContentExtractor:
     Combines static content extraction with dynamic note extraction.
     """
     
-    def __init__(self, config_file: str, skip_notes: bool = False):
+    def __init__(self, config_file: str, skip_notes: Optional[bool] = None):
         """
         Initialize the content extractor.
         
@@ -71,7 +71,14 @@ class TalkContentExtractor:
         """
         self.config = ConfigManager(config_file)
         self.db = DatabaseManager(self.config.get_db_path())
+        if skip_notes is None:
+            skip_notes = self.config.config.getboolean('DEFAULT', 'skip_notes', fallback=False)
         self.skip_notes = skip_notes
+        self.content_retry_attempts, self.content_retry_delay = self.config.get_content_retry_config()
+        if self.content_retry_attempts < 1:
+            self.content_retry_attempts = 1
+        if self.content_retry_delay < 0:
+            self.content_retry_delay = 0.0
 
         # Setup logger
         log_config = self.config.get_log_config()
@@ -763,143 +770,143 @@ class TalkContentExtractor:
         for para in paragraphs:
             para = para.strip()
             if para:
-                # Escape HTML characters
-                para = para.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-                formatted_paragraphs.append(f"        <p>{para}</p>")
-        
+                escaped = para.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                formatted_paragraphs.append(f"        <p>{escaped}</p>")
         return '\n'.join(formatted_paragraphs)
-    
+
+    def _process_talk_attempt(self, url: str) -> Tuple[bool, bool, Optional[str]]:
+        """Process a single talk URL once. Returns (success, saved, error)."""
+        try:
+            talk_data = self.extract_complete_talk(url)
+            if not talk_data:
+                return False, False, "No talk data extracted"
+            saved_path = self.save_talk_to_file(talk_data)
+            if saved_path:
+                try:
+                    self.mark_talk_processed(url, success=True)
+                except Exception as mark_err:
+                    self.logger.warning(f"Error marking {url} as processed: {mark_err}")
+                return True, True, None
+            return False, False, "Failed to save talk HTML"
+        except Exception as e:
+            self.logger.warning(f"Error processing {url}: {e}")
+            return False, False, str(e)
+
+    def _infer_language_from_url(self, url: str) -> Optional[str]:
+        """Infer language code from talk URL, if present."""
+        url_lower = url.lower()
+        if 'lang=spa' in url_lower or '/spa/' in url_lower:
+            return 'spa'
+        if 'lang=eng' in url_lower or '/eng/' in url_lower:
+            return 'eng'
+        return None
+
     def extract_talks_batch(self, talk_urls: List[str], batch_size: int = 24) -> Dict[str, int]:
-        """
-        Extract multiple talks in parallel batches using ThreadPoolExecutor.
-        Optimized for maximum performance.
-        
-        Args:
-            talk_urls: List of talk URLs to extract
-            batch_size: Number of talks to process concurrently (default: 24 for 64GB RAM)
-            
-        Returns:
-            Dictionary with extraction statistics
-        """
-        self.logger.info(f"Starting OPTIMIZED concurrent extraction of {len(talk_urls)} talks with {batch_size} threads")
-        
+        """Extract multiple talks with retry/backoff support."""
+        self.logger.info(
+            "Starting content extraction of %s talks (batch=%s, retries=%s, delay=%s)",
+            len(talk_urls), batch_size, self.content_retry_attempts, self.content_retry_delay
+        )
+
         stats = {
             'total': len(talk_urls),
             'successful': 0,
             'failed': 0,
             'saved': 0,
-            'marked_processed': 0
+            'marked_processed': 0,
+            'retries': 0
         }
-        
-        # Thread-safe counters
-        stats_lock = Lock()
-        
-        def extract_single_talk_optimized(url: str) -> Optional[Tuple[str, bool, bool]]:
-            """Extract a single talk and return results - optimized version."""
-            try:
-                # Extract complete talk data
-                talk_data = self.extract_complete_talk(url)
-                
-                if talk_data:
-                    # Save to file immediately in the same thread
-                    saved_path = self.save_talk_to_file(talk_data)
-                    saved = bool(saved_path)
-                    
-                    # Mark as processed in database if successfully saved
-                    if saved:
+
+        pending: List[Dict[str, Any]] = [{'url': url, 'attempt': 1} for url in talk_urls]
+
+        with tqdm(total=len(talk_urls), desc="Extracting talks", unit="talk", mininterval=0.1) as pbar:
+            while pending:
+                current_batch = pending
+                pending = []
+
+                with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="TalkExtractor") as executor:
+                    future_to_item = {
+                        executor.submit(self._process_talk_attempt, item['url']): item
+                        for item in current_batch
+                    }
+
+                    for future in as_completed(future_to_item):
+                        item = future_to_item[future]
+                        url = item['url']
+                        language = self._infer_language_from_url(url)
+
                         try:
-                            self.mark_talk_processed(url, success=True)
-                            # Note: stats['marked_processed'] will be updated in the main loop
-                        except Exception as db_e:
-                            self.logger.warning(f"Error marking {url} as processed: {db_e}")
-                    
-                    return (url, True, saved)
-                else:
-                    # Mark as processed even if extraction failed to avoid retry loops
-                    try:
-                        self.mark_talk_processed(url, success=False)
-                        # Note: stats['marked_processed'] will be updated in the main loop
-                    except Exception as db_e:
-                        self.logger.warning(f"Error marking failed {url} as processed: {db_e}")
-                    return (url, False, False)
-                    
-            except Exception as e:
-                self.logger.warning(f"Error processing {url}: {e}")  # Changed to warning for speed
-                # Mark as processed even on exception to avoid retry loops
-                try:
-                    self.mark_talk_processed(url, success=False)
-                    # Note: stats['marked_processed'] will be updated in the main loop
-                except Exception as db_e:
-                    self.logger.warning(f"Error marking exception {url} as processed: {db_e}")
-                return (url, False, False)
-        
-        # Process talks in parallel with optimized thread pool
-        with ThreadPoolExecutor(max_workers=batch_size, thread_name_prefix="OptimizedTalkExtractor") as executor:
-            # Submit all jobs at once for better scheduling
-            future_to_url = {executor.submit(extract_single_talk_optimized, url): url for url in talk_urls}
-            
-            # Process completed futures with faster progress updates
-            with tqdm(total=len(talk_urls), desc="Extracting talks", unit="talk", mininterval=0.1) as pbar:
-                for future in as_completed(future_to_url):
-                    url = future_to_url[future]
-                    try:
-                        result = future.result(timeout=30)  # Add timeout to prevent hanging
-                        if result:
-                            _, success, saved = result
-                            
-                            # Update stats thread-safely with minimal locking
-                            with stats_lock:
-                                if success:
-                                    stats['successful'] += 1
-                                    if saved:
-                                        stats['saved'] += 1
-                                else:
-                                    stats['failed'] += 1
-                                # Always increment marked_processed since we mark all URLs as processed
-                                stats['marked_processed'] += 1
-                            
-                            # Less frequent progress bar updates for performance
-                            if stats['successful'] % 5 == 0 or not success:
-                                pbar.set_postfix({
-                                    'success': f"{stats['successful']}/{stats['total']}",
-                                    'failed': stats['failed'],
-                                    'saved': stats['saved'],
-                                    'marked': stats['marked_processed']
-                                })
+                            success, saved, error = future.result(timeout=30)
+                        except Exception as e:
+                            success, saved, error = False, False, str(e)
+
+                        if success:
+                            stats['successful'] += 1
+                            if saved:
+                                stats['saved'] += 1
+                            stats['marked_processed'] += 1
+                            try:
+                                self.db.log_operation(
+                                    'talk_content_extraction',
+                                    'success',
+                                    language=language,
+                                    url=url,
+                                    message=None
+                                )
+                            except Exception as log_err:
+                                self.logger.debug(f"Failed to log success for {url}: {log_err}")
+                            pbar.update(1)
                         else:
-                            with stats_lock:
+                            error_msg = error or 'unknown error'
+                            if item['attempt'] < self.content_retry_attempts:
+                                stats['retries'] += 1
+                                pending.append({'url': url, 'attempt': item['attempt'] + 1})
+                                try:
+                                    self.db.log_operation(
+                                        'talk_content_extraction',
+                                        'retry',
+                                        language=language,
+                                        url=url,
+                                        message=f"Attempt {item['attempt']} failed: {error_msg}"
+                                    )
+                                except Exception as log_err:
+                                    self.logger.debug(f"Failed to log retry for {url}: {log_err}")
+                            else:
+                                try:
+                                    self.mark_talk_processed(url, success=False)
+                                except Exception as mark_err:
+                                    self.logger.warning(f"Error marking {url} as failed: {mark_err}")
                                 stats['failed'] += 1
                                 stats['marked_processed'] += 1
-                                
-                    except Exception as e:
-                        self.logger.warning(f"Future timeout/exception for {url}: {e}")  # Warning instead of error
-                        with stats_lock:
-                            stats['failed'] += 1
-                            stats['marked_processed'] += 1
-                    
-                    pbar.update(1)
-        
-        self.logger.info(f"OPTIMIZED concurrent extraction completed: {stats['successful']}/{stats['total']} successful, {stats['saved']} saved to files, {stats['marked_processed']} marked as processed")
+                                try:
+                                    self.db.log_operation(
+                                        'talk_content_extraction',
+                                        'failed',
+                                        language=language,
+                                        url=url,
+                                        message=f"Attempts exhausted ({item['attempt']}): {error_msg}"
+                                    )
+                                except Exception as log_err:
+                                    self.logger.debug(f"Failed to log failure for {url}: {log_err}")
+                                pbar.update(1)
+
+                if pending and self.content_retry_delay:
+                    self.logger.debug(
+                        "Waiting %s seconds before retrying %s talks",
+                        self.content_retry_delay,
+                        len(pending)
+                    )
+                    time.sleep(self.content_retry_delay)
+
+        self.logger.info(
+            "Content extraction completed: %s/%s successful, %s saved, %s failed, %s retries",
+            stats['successful'],
+            stats['total'],
+            stats['saved'],
+            stats['failed'],
+            stats['retries']
+        )
         return stats
-    
-    def get_unprocessed_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
-        """
-        Get list of unprocessed talk URLs from the database.
-        
-        Args:
-            language: Language to filter ('eng' or 'spa')
-            limit: Maximum number of URLs to return
-            
-        Returns:
-            List of unprocessed talk URLs
-        """
-        try:
-            urls = self.db.get_unprocessed_talk_urls(language, limit)
-            self.logger.info(f"Retrieved {len(urls)} unprocessed {language} talk URLs")
-            return urls
-        except Exception as e:
-            self.logger.error(f"Error retrieving unprocessed URLs for {language}: {e}")
-            return []
     
     def get_all_unprocessed_talk_urls(self, languages: Optional[List[str]] = None, limit: Optional[int] = None) -> List[str]:
         """

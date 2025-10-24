@@ -83,6 +83,18 @@ class ConfigManager:
         delay = self.config.getfloat('DEFAULT', 'retry_delay')
         return attempts, delay
     
+    def get_content_retry_config(self) -> tuple:
+        """Get retry configuration for content extraction (attempts, delay)."""
+        default_attempts = int(self.config['DEFAULT'].get('retry_attempts', 3))
+        default_delay = float(self.config['DEFAULT'].get('retry_delay', 2.0))
+        if self.config.has_section('CONTENT'):
+            attempts = int(self.config['CONTENT'].get('retry_attempts', default_attempts))
+            delay = float(self.config['CONTENT'].get('retry_delay', default_delay))
+        else:
+            attempts = default_attempts
+            delay = default_delay
+        return attempts, delay
+    
     def get_log_config(self) -> Dict[str, Any]:
         """Get logging configuration."""
         return {
