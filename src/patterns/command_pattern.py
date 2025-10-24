@@ -115,29 +115,35 @@ class TalkURLExtractionCommand(Command):
 class ContentExtractionCommand(Command):
     """Command for Phase 3: Content Extraction."""
     
-    def __init__(self, config_path: str, languages: List[str], limit: Optional[int] = None, batch_size: int = 12):
+    def __init__(self, config_path: str, languages: List[str], limit: Optional[int] = None,
+                 batch_size: int = 12, skip_notes: bool = False):
         self.config_path = config_path
         self.languages = languages
         self.limit = limit
         self.batch_size = batch_size
+        self.skip_notes = skip_notes
         self.logger = logging.getLogger(__name__)
-    
+
     def execute(self) -> Dict[str, Any]:
         """Execute content extraction with specified parameters."""
         start_time = datetime.now()
         self.logger.info(
-            "Starting content extraction for languages %s (limit: %s, batch_size: %s)",
+            "Starting content extraction for languages %s (limit: %s, batch_size: %s, skip_notes: %s)",
             ', '.join(self.languages),
             self.limit,
-            self.batch_size
+            self.batch_size,
+            self.skip_notes
         )
         
         try:
-            extractor = ScraperFactory.create_talk_content_extractor(self.config_path)
-            
+            extractor = ScraperFactory.create_talk_content_extractor(
+                self.config_path,
+                skip_notes=self.skip_notes
+            )
+        
             # Get unprocessed talk URLs
             all_urls = extractor.get_all_unprocessed_talk_urls(self.languages, limit=self.limit)
-            
+        
             if not all_urls:
                 return {
                     'success': True,
@@ -159,6 +165,7 @@ class ContentExtractionCommand(Command):
                 'languages': self.languages,
                 'limit': self.limit,
                 'batch_size': self.batch_size,
+                'skip_notes': self.skip_notes,
                 'duration': duration.total_seconds(),
                 'start_time': start_time.isoformat(),
                 'end_time': end_time.isoformat()
@@ -171,13 +178,15 @@ class ContentExtractionCommand(Command):
                 'error': str(e),
                 'languages': self.languages,
                 'limit': self.limit,
-                'batch_size': self.batch_size
+                'batch_size': self.batch_size,
+                'skip_notes': self.skip_notes
             }
     
     def get_description(self) -> str:
         """Get command description."""
         limit_str = f" (limit: {self.limit})" if self.limit else ""
-        return f"Extract talk content for {', '.join(self.languages)} with batch size {self.batch_size}{limit_str}"
+        notes_str = " (skip notes)" if self.skip_notes else ""
+        return f"Extract talk content for {', '.join(self.languages)} with batch size {self.batch_size}{limit_str}{notes_str}"
 
 
 class CommandInvoker:

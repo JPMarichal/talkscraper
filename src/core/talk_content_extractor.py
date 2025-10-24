@@ -61,16 +61,18 @@ class TalkContentExtractor:
     Combines static content extraction with dynamic note extraction.
     """
     
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, skip_notes: bool = False):
         """
         Initialize the content extractor.
         
         Args:
             config_file: Path to configuration file
+            skip_notes: Whether to skip note extraction (default: False)
         """
         self.config = ConfigManager(config_file)
         self.db = DatabaseManager(self.config.get_db_path())
-        
+        self.skip_notes = skip_notes
+
         # Setup logger
         log_config = self.config.get_log_config()
         self.logger = setup_logger('TalkContentExtractor', log_config)
@@ -93,62 +95,64 @@ class TalkContentExtractor:
         self.session.mount('https://', adapter)
         
         # Chrome options for Selenium (notes extraction) - Optimized for speed
-        selenium_config = self.config.get_selenium_config()
-        self.chrome_options = Options()
-        if selenium_config['headless']:
-            self.chrome_options.add_argument('--headless')
-        
-        # Performance optimizations - CPU focused
-        self.chrome_options.add_argument('--no-sandbox')
-        self.chrome_options.add_argument('--disable-dev-shm-usage')
-        self.chrome_options.add_argument('--disable-gpu')
-        self.chrome_options.add_argument('--disable-extensions')
-        self.chrome_options.add_argument('--disable-web-security')
-        self.chrome_options.add_argument('--disable-features=VizDisplayCompositor,TranslateUI,BlinkGenPropertyTrees')
-        self.chrome_options.add_argument('--disable-background-timer-throttling')
-        self.chrome_options.add_argument('--disable-renderer-backgrounding')
-        self.chrome_options.add_argument('--disable-backgrounding-occluded-windows')
-        self.chrome_options.add_argument('--disable-background-networking')
-        self.chrome_options.add_argument('--disable-image-loading')
-        self.chrome_options.add_argument('--disable-plugins')
-        self.chrome_options.add_argument('--disable-default-apps')
-        
-        # CPU optimization specific flags
-        self.chrome_options.add_argument('--disable-javascript-harmony-shipping')
-        self.chrome_options.add_argument('--disable-software-rasterizer')
-        self.chrome_options.add_argument('--disable-background-media-downloads')
-        self.chrome_options.add_argument('--disable-client-side-phishing-detection')
-        self.chrome_options.add_argument('--disable-sync')
-        self.chrome_options.add_argument('--disable-speech-api')
-        
-        self.chrome_options.add_argument('--window-size=600,400')  # Optimized window size
-        self.chrome_options.add_argument('--memory-pressure-off')
-        self.chrome_options.add_argument('--max_old_space_size=512')  # Limit V8 memory
-        self.chrome_options.add_argument('--aggressive-cache-discard')
-        
-        # Disable logging to reduce I/O
-        self.chrome_options.add_argument('--log-level=3')
-        self.chrome_options.add_argument('--silent')
-        
-        # Experimental optimizations
-        self.chrome_options.add_experimental_option('useAutomationExtension', False)
-        self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        
-        # Prefs for faster loading
-        prefs = {
-            "profile.default_content_setting_values": {
-                "images": 2,  # Block images
-                "plugins": 2,  # Block plugins
-                "popups": 2,  # Block popups
-                "geolocation": 2,  # Block location sharing
-                "notifications": 2,  # Block notifications
-                "media_stream": 2,  # Block media stream
-            },
-            "profile.managed_default_content_settings": {
-                "images": 2
+        self.chrome_options = None
+        if not self.skip_notes:
+            selenium_config = self.config.get_selenium_config()
+            self.chrome_options = Options()
+            if selenium_config['headless']:
+                self.chrome_options.add_argument('--headless')
+            
+            # Performance optimizations - CPU focused
+            self.chrome_options.add_argument('--no-sandbox')
+            self.chrome_options.add_argument('--disable-dev-shm-usage')
+            self.chrome_options.add_argument('--disable-gpu')
+            self.chrome_options.add_argument('--disable-extensions')
+            self.chrome_options.add_argument('--disable-web-security')
+            self.chrome_options.add_argument('--disable-features=VizDisplayCompositor,TranslateUI,BlinkGenPropertyTrees')
+            self.chrome_options.add_argument('--disable-background-timer-throttling')
+            self.chrome_options.add_argument('--disable-renderer-backgrounding')
+            self.chrome_options.add_argument('--disable-backgrounding-occluded-windows')
+            self.chrome_options.add_argument('--disable-background-networking')
+            self.chrome_options.add_argument('--disable-image-loading')
+            self.chrome_options.add_argument('--disable-plugins')
+            self.chrome_options.add_argument('--disable-default-apps')
+            
+            # CPU optimization specific flags
+            self.chrome_options.add_argument('--disable-javascript-harmony-shipping')
+            self.chrome_options.add_argument('--disable-software-rasterizer')
+            self.chrome_options.add_argument('--disable-background-media-downloads')
+            self.chrome_options.add_argument('--disable-client-side-phishing-detection')
+            self.chrome_options.add_argument('--disable-sync')
+            self.chrome_options.add_argument('--disable-speech-api')
+            
+            self.chrome_options.add_argument('--window-size=600,400')  # Optimized window size
+            self.chrome_options.add_argument('--memory-pressure-off')
+            self.chrome_options.add_argument('--max_old_space_size=512')  # Limit V8 memory
+            self.chrome_options.add_argument('--aggressive-cache-discard')
+            
+            # Disable logging to reduce I/O
+            self.chrome_options.add_argument('--log-level=3')
+            self.chrome_options.add_argument('--silent')
+            
+            # Experimental optimizations
+            self.chrome_options.add_experimental_option('useAutomationExtension', False)
+            self.chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            
+            # Prefs for faster loading
+            prefs = {
+                "profile.default_content_setting_values": {
+                    "images": 2,  # Block images
+                    "plugins": 2,  # Block plugins
+                    "popups": 2,  # Block popups
+                    "geolocation": 2,  # Block location sharing
+                    "notifications": 2,  # Block notifications
+                    "media_stream": 2,  # Block media stream
+                },
+                "profile.managed_default_content_settings": {
+                    "images": 2
+                }
             }
-        }
-        self.chrome_options.add_experimental_option("prefs", prefs)
+            self.chrome_options.add_experimental_option("prefs", prefs)
         
         # Output directory configuration
         self.output_dir = Path('conf')  # Use default conf directory
@@ -179,11 +183,15 @@ class TalkContentExtractor:
                 self.logger.error(f"Failed to extract static content from: {url}")
                 return None
             
-            # Step 2: Extract notes using Selenium
-            notes = self._extract_notes_selenium(url)
-            if notes is None:
-                self.logger.warning(f"Failed to extract notes from: {url}, proceeding with static content only")
+            # Step 2: Extract notes (unless skipped)
+            notes: List[str]
+            if self.skip_notes:
                 notes = []
+            else:
+                notes = self._extract_notes_selenium(url)
+                if notes is None:
+                    self.logger.warning(f"Failed to extract notes from: {url}, proceeding with static content only")
+                    notes = []
             
             # Step 3: Combine data
             complete_data = CompleteTalkData(
@@ -486,6 +494,10 @@ class TalkContentExtractor:
         Returns:
             List of notes or None if extraction fails
         """
+        if self.skip_notes:
+            self.logger.debug("skip_notes enabled; skipping Selenium note extraction")
+            return []
+
         driver = None
         notes = []
         

@@ -22,7 +22,7 @@ class ScraperFactory:
     """
     
     @staticmethod
-    def create_scraper(phase: int, config_path: str = "config.ini") -> Union[URLCollector, TalkURLExtractor, TalkContentExtractor]:
+    def create_scraper(phase: int, config_path: str = "config.ini", **kwargs) -> Union[URLCollector, TalkURLExtractor, TalkContentExtractor]:
         """
         Create and return the appropriate scraper for the given phase.
         
@@ -41,7 +41,8 @@ class ScraperFactory:
         elif phase == 2:
             return TalkURLExtractor(config_path)
         elif phase == 3:
-            return TalkContentExtractor(config_path)
+            skip_notes = kwargs.get("skip_notes", False)
+            return TalkContentExtractor(config_path, skip_notes=skip_notes)
         else:
             raise ValueError(f"Invalid phase: {phase}. Must be 1, 2, or 3.")
     
@@ -56,6 +57,6 @@ class ScraperFactory:
         return TalkURLExtractor(config_path)
     
     @classmethod
-    def create_talk_content_extractor(cls, config_path: str = "config.ini") -> TalkContentExtractor:
+    def create_talk_content_extractor(cls, config_path: str = "config.ini", skip_notes: bool = False) -> TalkContentExtractor:
         """Create talk content extractor instance."""
-        return TalkContentExtractor(config_path)
+        return TalkContentExtractor(config_path, skip_notes=skip_notes)

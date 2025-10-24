@@ -57,14 +57,15 @@ class CLICommands:
             print(f"❌ Talk URL extraction failed: {result['error']}")
             return False
     
-    def extract_content(self, languages: Optional[List[str]] = None, limit: Optional[int] = None, batch_size: int = 12) -> bool:
+    def extract_content(self, languages: Optional[List[str]] = None, limit: Optional[int] = None,
+                        batch_size: int = 12, skip_notes: bool = False) -> bool:
         """Execute Phase 3: Content Extraction."""
         if languages is None:
             languages = ["eng", "spa"]
 
-        command = ContentExtractionCommand(self.config_path, languages, limit, batch_size)
+        command = ContentExtractionCommand(self.config_path, languages, limit, batch_size, skip_notes=skip_notes)
         result = self.invoker.execute_command(command)
-        
+
         if result['success']:
             if 'message' in result:
                 print(f"ℹ️  {result['message']}")
@@ -77,6 +78,8 @@ class CLICommands:
                     error_count = result['results'].get('error_count', 0)
                     print(f"   ✅ Successful: {success_count}")
                     print(f"   ❌ Errors: {error_count}")
+                if result.get('skip_notes', skip_notes):
+                    print("   📝 Notes extraction skipped")
             print(f"⏱️  Duration: {result['duration']:.2f} seconds")
             return True
         else:
@@ -189,6 +192,11 @@ Examples:
         type=int,
         default=12,
         help="Number of talks to process simultaneously (default: 12)"
+    )
+    content_parser.add_argument(
+        "--skip-notes",
+        action="store_true",
+        help="Skip Selenium note extraction (static content only)"
     )
     
     # Statistics command
