@@ -46,7 +46,7 @@ def main():
         success = cli.extract_talk_urls(args.languages)
     
     elif args.command == "extract-content":
-        success = cli.extract_content(args.limit, args.batch_size)
+        success = cli.extract_content(args.languages, args.limit, args.batch_size)
     
     elif args.command == "stats":
         success = cli.show_statistics()

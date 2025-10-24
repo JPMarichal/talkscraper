@@ -57,16 +57,20 @@ class CLICommands:
             print(f"❌ Talk URL extraction failed: {result['error']}")
             return False
     
-    def extract_content(self, limit: Optional[int] = None, batch_size: int = 12) -> bool:
+    def extract_content(self, languages: Optional[List[str]] = None, limit: Optional[int] = None, batch_size: int = 12) -> bool:
         """Execute Phase 3: Content Extraction."""
-        command = ContentExtractionCommand(self.config_path, limit, batch_size)
+        if languages is None:
+            languages = ["eng", "spa"]
+
+        command = ContentExtractionCommand(self.config_path, languages, limit, batch_size)
         result = self.invoker.execute_command(command)
         
         if result['success']:
             if 'message' in result:
                 print(f"ℹ️  {result['message']}")
             else:
-                print(f"✅ Content extraction completed successfully!")
+                langs = ', '.join(result.get('languages', languages))
+                print(f"✅ Content extraction completed successfully for: {langs}")
                 print(f"📊 Talks processed: {result.get('processed_count', 0)}")
                 if result.get('results'):
                     success_count = result['results'].get('success_count', 0)
@@ -166,6 +170,13 @@ Examples:
     content_parser = subparsers.add_parser(
         "extract-content",
         help="Phase 3: Extract talk content and generate HTML files"
+    )
+    content_parser.add_argument(
+        "--languages",
+        nargs="+",
+        choices=["eng", "spa"],
+        default=["eng", "spa"],
+        help="Languages to process (default: both)"
     )
     content_parser.add_argument(
         "--limit",

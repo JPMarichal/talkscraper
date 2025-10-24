@@ -889,19 +889,23 @@ class TalkContentExtractor:
             self.logger.error(f"Error retrieving unprocessed URLs for {language}: {e}")
             return []
     
-    def get_all_unprocessed_talk_urls(self, limit: Optional[int] = None) -> List[str]:
+    def get_all_unprocessed_talk_urls(self, languages: Optional[List[str]] = None, limit: Optional[int] = None) -> List[str]:
         """
         Get list of unprocessed talk URLs from all languages.
-        
+
         Args:
+            languages: Iterable of language codes to include (default: both)
             limit: Maximum number of URLs to return
-            
+
         Returns:
             List of unprocessed talk URLs from all languages
         """
         try:
             all_urls = []
-            for language in ['eng', 'spa']:  # Support both languages
+            if languages is None:
+                languages = ['eng', 'spa']
+
+            for language in languages:
                 try:
                     urls = self.db.get_unprocessed_talk_urls(language)
                     all_urls.extend(urls)
