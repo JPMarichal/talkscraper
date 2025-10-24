@@ -286,7 +286,23 @@ class DatabaseManager:
                 WHERE url = ?
             ''', (conference_url,))
             conn.commit()
-    
+
+    def conference_has_talks(self, conference_url: str, language: Optional[str] = None) -> bool:
+        """Check if the given conference has any stored talk URLs."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            if language:
+                cursor.execute(
+                    '''SELECT 1 FROM talk_urls WHERE conference_url = ? AND language = ? LIMIT 1''',
+                    (conference_url, language)
+                )
+            else:
+                cursor.execute(
+                    '''SELECT 1 FROM talk_urls WHERE conference_url = ? LIMIT 1''',
+                    (conference_url,)
+                )
+            return cursor.fetchone() is not None
+
     def get_talk_extraction_stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
         """
         Get statistics about talk URL extraction progress.

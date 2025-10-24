@@ -98,8 +98,11 @@ class TalkURLExtractor:
                         stored_count = self.db.store_talk_urls(conference_url, language, talk_urls)
                         total_talks_extracted += stored_count
                         
-                        # Mark conference as processed
-                        self._mark_conference_processed(conference_url)
+                        if stored_count > 0:
+                            # Only mark as processed if we stored at least one new talk
+                            self._mark_conference_processed(conference_url)
+                        else:
+                            self.logger.info(f"No new talk URLs stored for {conference_url}; leaving as pending")
                         
                         pbar.set_postfix({
                             'talks': len(talk_urls),
