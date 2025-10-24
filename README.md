@@ -15,7 +15,7 @@ Crear una herramienta robusta que recopile todos los discursos de conferencias g
    - ✅ Procesamiento de archivos de décadas anteriores (2010-2019, 2000-2009, 1990-1999, 1980-1989)
    - ✅ URLs individuales para años históricos (1971-1979)
    - ✅ Almacenamiento en base de datos SQLite con deduplicación
-   - ✅ **Resultado: 206 conferencias únicas (122 ENG + 84 SPA)**
+   - ✅ **Resultado (octubre 2025): 206 conferencias únicas (123 ENG + 83 SPA)**
 
 2. **Fase 2: Extracción de URLs de Discursos** ⏳ **(SIGUIENTE)**
    - Obtención de URLs individuales de discursos desde cada conferencia
@@ -121,8 +121,8 @@ python main.py --phase 1 --verbose
 Languages: eng, spa
 Config: config.ini
 
-✅ ENG: 122 conference URLs collected
-✅ SPA: 84 conference URLs collected
+✅ ENG: 123 conference URLs collected
+✅ SPA: 83 conference URLs collected
 
 🎯 Total URLs collected: 206
 
@@ -135,8 +135,8 @@ Config: config.ini
 
 ### URLs Recolectadas por Fuente:
 
-**🇺🇸 Inglés (122 conferencias únicas)**
-- Página principal: ~24 URLs (2020-presente)
+**🇺🇸 Inglés (123 conferencias únicas)**
+- Página principal: ~25 URLs (2020-presente)
 - Década 2010-2019: 20 URLs
 - Década 2000-2009: 20 URLs  
 - Década 1990-1999: 20 URLs
@@ -144,8 +144,8 @@ Config: config.ini
 - URLs individuales 1971-1979: 18 URLs
 - **Cobertura: 1971-presente (53+ años)**
 
-**🇪🇸 Español (84 conferencias únicas)**
-- Página principal: ~24 URLs (2020-presente)
+**🇪🇸 Español (83 conferencias únicas)**
+- Página principal: ~23 URLs (2020-presente)
 - Década 2010-2019: 20 URLs
 - Década 2000-2009: 20 URLs
 - Década 1990-1999: 20 URLs
