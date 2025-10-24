@@ -96,10 +96,62 @@ class CLICommands:
             config = ConfigManager(self.config_path)
             db = DatabaseManager(config.get_db_path())
             
+            stats = db.get_processing_stats()
+            log_summary = db.get_processing_log_summary()
+
             print("📊 TalkScraper Statistics")
-            print("=" * 50)
-            print("Statistics functionality will be implemented")
-            print("Database connection: ✅ OK")
+            print("=" * 60)
+
+            print("Conferences")
+            print("-" * 60)
+            if stats['conferences']:
+                for language, data in stats['conferences'].items():
+                    print(f" {language.upper():>3} → Total: {data['total']:<4} | Procesadas: {data['processed']:<4} | Pendientes: {data['pending']:<4}")
+            else:
+                print(" No hay registros de conferencias.")
+
+            print("\nTalk URLs")
+            print("-" * 60)
+            if stats['talks']:
+                for language, data in stats['talks'].items():
+                    print(f" {language.upper():>3} → Total: {data['total']:<4} | Procesadas: {data['processed']:<4} | Pendientes: {data['pending']:<4}")
+            else:
+                print(" No hay registros de discursos.")
+
+            print("\nMetadata respaldada")
+            print("-" * 60)
+            if stats['metadata']:
+                for language, data in stats['metadata'].items():
+                    print(f" {language.upper():>3} → {data['total']} discursos en `talk_metadata`")
+            else:
+                print(" No hay metadatos guardados.")
+
+            print("\nConferencias recientes (talk_metadata)")
+            print("-" * 60)
+            if stats['recent_conferences']:
+                for rc in stats['recent_conferences']:
+                    print(f" {rc['conference_session']} [{rc['language'].upper()}] → {rc['talks']} discursos")
+            else:
+                print(" No hay conferencias recientes registradas.")
+
+            print("\nProcessing log")
+            print("-" * 60)
+            if log_summary['status_counts']:
+                for status, count in log_summary['status_counts'].items():
+                    print(f" {status:>8}: {count}")
+            else:
+                print(" No hay entradas en `processing_log`.")
+
+            if log_summary['recent_failures']:
+                print("\nÚltimos fallos")
+                for failure in log_summary['recent_failures']:
+                    time_str = failure['timestamp'] or '-'
+                    lang = failure['language'] or '-'
+                    print(f" • {time_str} | {failure['operation']} [{lang}] → {failure['url'] or '-'}")
+                    if failure['message']:
+                        print(f"   ↳ {failure['message']}")
+            else:
+                print("\nNo se registran fallos recientes.")
             
             return True
             

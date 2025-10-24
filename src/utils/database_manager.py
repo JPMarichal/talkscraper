@@ -7,7 +7,7 @@ Handles SQLite database operations for storing scraping progress and URLs.
 import sqlite3
 import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Union
+from typing import List, Optional, Dict, Union, Any
 from datetime import datetime
 
 
@@ -202,7 +202,7 @@ class DatabaseManager:
             except sqlite3.Error as e:
                 self.logger.error(f"Error storing talk metadata for {url}: {e}")
     
-    def get_processing_stats(self) -> Dict[str, Dict[str, Dict[str, int]]]:
+    def get_processing_stats(self) -> Dict[str, Any]:
         """Get processing statistics."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -215,8 +215,16 @@ class DatabaseManager:
                 FROM conference_urls 
                 GROUP BY language
             ''')
-            conference_stats = {row[0]: {'total': row[1], 'processed': row[2]} 
-                              for row in cursor.fetchall()}
+            conference_stats = {}
+            for row in cursor.fetchall():
+                language = row[0]
+                total = row[1] or 0
+                processed = row[2] or 0
+                conference_stats[language] = {
+                    'total': total,
+                    'processed': processed,
+                    'pending': max(total - processed, 0)
+                }
             
             # Talk stats
             cursor.execute('''
@@ -226,12 +234,82 @@ class DatabaseManager:
                 FROM talk_urls 
                 GROUP BY language
             ''')
-            talk_stats = {row[0]: {'total': row[1], 'processed': row[2]} 
-                         for row in cursor.fetchall()}
+            talk_stats = {}
+            for row in cursor.fetchall():
+                language = row[0]
+                total = row[1] or 0
+                processed = row[2] or 0
+                talk_stats[language] = {
+                    'total': total,
+                    'processed': processed,
+                    'pending': max(total - processed, 0)
+                }
+            
+            cursor.execute('''
+                SELECT language,
+                       COUNT(*) as total
+                FROM talk_metadata
+                GROUP BY language
+            ''')
+            metadata_stats = {row[0]: {'total': row[1] or 0} for row in cursor.fetchall()}
+
+            cursor.execute('''
+                SELECT conference_session, language, COUNT(*) as talks
+                FROM talk_metadata
+                WHERE conference_session IS NOT NULL
+                GROUP BY conference_session, language
+                ORDER BY conference_session DESC, language
+                LIMIT 10
+            ''')
+            recent_conferences = [
+                {
+                    'conference_session': row[0],
+                    'language': row[1],
+                    'talks': row[2] or 0
+                }
+                for row in cursor.fetchall()
+            ]
             
         return {
             'conferences': conference_stats,
-            'talks': talk_stats
+            'talks': talk_stats,
+            'metadata': metadata_stats,
+            'recent_conferences': recent_conferences
+        }
+
+    def get_processing_log_summary(self, limit: int = 5) -> Dict[str, Any]:
+        """Get summary of processing log entries."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT status, COUNT(*)
+                FROM processing_log
+                GROUP BY status
+            ''')
+            status_counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+            cursor.execute('''
+                SELECT timestamp, operation, language, url, message
+                FROM processing_log
+                WHERE status = 'failed'
+                ORDER BY timestamp DESC
+                LIMIT ?
+            ''', (limit,))
+            recent_failures = [
+                {
+                    'timestamp': row[0],
+                    'operation': row[1],
+                    'language': row[2],
+                    'url': row[3],
+                    'message': row[4]
+                }
+                for row in cursor.fetchall()
+            ]
+
+        return {
+            'status_counts': status_counts,
+            'recent_failures': recent_failures
         }
     
     def log_operation(self, operation: str, status: str, language: Optional[str] = None,
