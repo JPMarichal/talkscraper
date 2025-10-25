@@ -77,7 +77,7 @@ class URLCollector:
         main_page_urls = self._extract_main_page_urls(base_url)
         
         # Get URLs from decade archive pages
-        decade_urls = self._extract_decade_urls(base_url)
+        decade_urls = self._extract_decade_urls(base_url, language)
         
         # Combine and deduplicate
         all_urls = list(set(main_page_urls + decade_urls))
@@ -113,12 +113,16 @@ class URLCollector:
             self.logger.error(f"Error extracting main page URLs: {e}")
             return []
     
-    def _extract_decade_urls(self, base_url: str) -> List[str]:
-        """Extract conference URLs from decade archive pages."""
+    def _extract_decade_urls(self, base_url: str, language: str) -> List[str]:
+        """Extract conference URLs from decade archive pages.
+        
+        Args:
+            base_url: Base URL for the language
+            language: Language code ('eng' or 'spa')
+        """
         self.logger.info("Extracting decade archive URLs")
         
         decade_urls = []
-        language = 'eng' if 'lang=eng' in base_url else 'spa'
         
         # Get base domain from config
         from urllib.parse import urlparse

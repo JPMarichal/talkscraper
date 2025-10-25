@@ -52,9 +52,10 @@ class TestURLCollectorIntegration:
         
         collector = URLCollector(test_config_file)
         
-        # Should handle HTTP error gracefully
-        with pytest.raises(Exception):
-            collector.collect_all_urls(['eng'])
+        # Should handle HTTP error gracefully and return empty list
+        results = collector.collect_all_urls(['eng'])
+        assert 'eng' in results
+        assert len(results['eng']) == 0  # No URLs collected due to error
             
     @pytest.mark.integration
     @pytest.mark.network
@@ -63,11 +64,13 @@ class TestURLCollectorIntegration:
         collector = URLCollector(test_config_file)
         
         # Mock requests to raise connection error
-        with patch('requests.get') as mock_get:
+        with patch('requests.Session.get') as mock_get:
             mock_get.side_effect = ConnectionError("Connection failed")
             
-            with pytest.raises(ConnectionError):
-                collector.collect_all_urls(['eng'])
+            # Should handle connection error gracefully and return empty list
+            results = collector.collect_all_urls(['eng'])
+            assert 'eng' in results
+            assert len(results['eng']) == 0  # No URLs collected due to error
                 
     @pytest.mark.integration
     @pytest.mark.database
@@ -110,12 +113,12 @@ class TestURLCollectorIntegration:
         </html>
         '''
         
-        # Mock main page that includes decade links
+        # Mock main page
         main_page_html = '''
         <html>
         <body>
             <div class="conferences">
-                <a class="test-decade" href="/study/general-conference/decades/2010?lang=eng">2010s</a>
+                <a class="test-conference" href="/study/general-conference/2024/04?lang=eng">April 2024</a>
             </div>
         </body>
         </html>
@@ -128,17 +131,20 @@ class TestURLCollectorIntegration:
             status=200
         )
         
-        mock_requests.add(
-            responses.GET,
-            'https://test.example.com/study/general-conference/decades/2010?lang=eng',
-            body=decade_html,
-            status=200
-        )
+        # Mock all decade archive pages that the collector will try to fetch
+        # The collector uses hardcoded decade URLs, not extracted from main page
+        for decade in ["20102019", "20002009", "19901999", "19801989"]:
+            mock_requests.add(
+                responses.GET,
+                f'https://test.example.com/study/general-conference/{decade}?lang=eng',
+                body=decade_html,
+                status=200
+            )
         
         collector = URLCollector(test_config_file)
         results = collector.collect_all_urls(['eng'])
         
-        # Should have collected URLs from both main page and decade page
+        # Should have collected URLs from both main page and decade pages
         assert len(results['eng']) > 0
         
     @pytest.mark.integration
