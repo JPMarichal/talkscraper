@@ -188,17 +188,43 @@ class TalkContentExtractor:
             static_data = self._extract_static_content(url)
             if not static_data:
                 self.logger.error(f"Failed to extract static content from: {url}")
+                # Log failure to database
+                try:
+                    language = self._infer_language_from_url(url)
+                    self.db.log_operation(
+                        'talk_content_extraction',
+                        'failed',
+                        language=language,
+                        url=url,
+                        message="Failed to extract static content (title, author, or content missing)"
+                    )
+                except Exception as log_err:
+                    self.logger.debug(f"Failed to log extraction failure: {log_err}")
                 return None
             
             # Step 2: Extract notes (unless skipped)
             notes: List[str]
+            selenium_failed = False
             if self.skip_notes:
                 notes = []
             else:
                 notes = self._extract_notes_selenium(url)
                 if notes is None:
+                    selenium_failed = True
                     self.logger.warning(f"Failed to extract notes from: {url}, proceeding with static content only")
                     notes = []
+                    # Log Selenium failure to database
+                    try:
+                        language = static_data.get('language', self._infer_language_from_url(url))
+                        self.db.log_operation(
+                            'selenium_note_extraction',
+                            'failed',
+                            language=language,
+                            url=url,
+                            message="Selenium note extraction failed, proceeding with static content only"
+                        )
+                    except Exception as log_err:
+                        self.logger.debug(f"Failed to log Selenium failure: {log_err}")
             
             # Step 3: Combine data
             complete_data = CompleteTalkData(
@@ -215,12 +241,28 @@ class TalkContentExtractor:
                 note_count=len(notes)
             )
             
-            self.logger.info(f"Successfully extracted complete talk: '{complete_data.title}' by {complete_data.author} ({complete_data.note_count} notes)")
+            status_msg = f"Successfully extracted complete talk: '{complete_data.title}' by {complete_data.author} ({complete_data.note_count} notes)"
+            if selenium_failed:
+                status_msg += " [Selenium notes extraction failed]"
+            self.logger.info(status_msg)
+            
             self._backup_talk_metadata(complete_data)
             return complete_data
             
         except Exception as e:
             self.logger.error(f"Error in complete extraction for {url}: {e}")
+            # Log unexpected error to database
+            try:
+                language = self._infer_language_from_url(url)
+                self.db.log_operation(
+                    'talk_content_extraction',
+                    'error',
+                    language=language,
+                    url=url,
+                    message=f"Unexpected error: {str(e)}"
+                )
+            except Exception as log_err:
+                self.logger.debug(f"Failed to log error: {log_err}")
             return None
     
     def _extract_static_content(self, url: str) -> Optional[Dict[str, str]]:
@@ -774,12 +816,53 @@ class TalkContentExtractor:
                 formatted_paragraphs.append(f"        <p>{escaped}</p>")
         return '\n'.join(formatted_paragraphs)
 
+    def _validate_talk_data(self, talk_data: CompleteTalkData) -> Tuple[bool, Optional[str]]:
+        """
+        Validate that talk data has all required fields.
+        
+        Args:
+            talk_data: Talk data to validate
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        # Validate required fields
+        if not talk_data.title or len(talk_data.title.strip()) < 3:
+            return False, "Missing or invalid title"
+        
+        if not talk_data.author or len(talk_data.author.strip()) < 2:
+            return False, "Missing or invalid author"
+        
+        if not talk_data.content or len(talk_data.content.strip()) < 100:
+            return False, "Missing or insufficient content"
+        
+        if not talk_data.url:
+            return False, "Missing URL"
+        
+        if not talk_data.language or talk_data.language not in ['eng', 'spa']:
+            return False, "Missing or invalid language"
+        
+        if not talk_data.year or not talk_data.year.isdigit():
+            return False, "Missing or invalid year"
+        
+        if not talk_data.conference_session:
+            return False, "Missing conference session"
+        
+        return True, None
+    
     def _process_talk_attempt(self, url: str) -> Tuple[bool, bool, Optional[str]]:
         """Process a single talk URL once. Returns (success, saved, error)."""
         try:
             talk_data = self.extract_complete_talk(url)
             if not talk_data:
                 return False, False, "No talk data extracted"
+            
+            # Validate talk data before saving and marking as processed
+            is_valid, validation_error = self._validate_talk_data(talk_data)
+            if not is_valid:
+                self.logger.error(f"Talk data validation failed for {url}: {validation_error}")
+                return False, False, f"Validation failed: {validation_error}"
+            
             saved_path = self.save_talk_to_file(talk_data)
             if saved_path:
                 try:
@@ -982,35 +1065,93 @@ class TalkContentExtractor:
 
     def backup_existing_html_metadata(self):
         """Scan saved HTML files and backup metadata to the database."""
+        total_processed = 0
+        total_errors = 0
+        
         for language in ['eng', 'spa']:
             lang_dir = self.output_dir / language
+            if not lang_dir.exists():
+                self.logger.warning(f"Directory not found: {lang_dir}")
+                continue
+                
             for html_file in lang_dir.rglob('*.html'):
                 try:
                     with open(html_file, 'r', encoding='utf-8') as f:
                         soup = BeautifulSoup(f, 'html.parser')
-                        title = soup.find('h1').get_text(strip=True)
-                        author = soup.find(class_='author').get_text(strip=True)
-                        calling = soup.find(class_='calling').get_text(strip=True)
-                        note_count = len(soup.select('.notes li'))
-                        url_tag = soup.find('a', href=True)
-                        url = url_tag['href'] if url_tag else ''
-                        year = html_file.parent.name[:4]
-                        conference_session = html_file.parent.name
-                        talk_data = CompleteTalkData(
-                            title=title,
-                            author=author,
-                            calling=calling,
-                            content='',
-                            notes=[],
-                            url=url,
-                            language=language,
-                            year=year,
-                            conference_session=conference_session,
-                            extraction_timestamp='',
-                            note_count=note_count
-                        )
-                        self._backup_talk_metadata(talk_data)
+                    
+                    # Extract title (required)
+                    title_elem = soup.find('h1')
+                    if not title_elem:
+                        self.logger.warning(f"No title found in {html_file}")
+                        total_errors += 1
+                        continue
+                    title = title_elem.get_text(strip=True)
+                    
+                    # Extract author (required)
+                    author_elem = soup.find(class_='author')
+                    if not author_elem:
+                        self.logger.warning(f"No author found in {html_file}")
+                        total_errors += 1
+                        continue
+                    author = author_elem.get_text(strip=True)
+                    
+                    # Extract calling (optional)
+                    calling_elem = soup.find(class_='calling')
+                    calling = calling_elem.get_text(strip=True) if calling_elem else "Unknown"
+                    
+                    # Extract note count
+                    note_count = len(soup.select('.notes li'))
+                    
+                    # Extract URL from extraction-info section
+                    url = ''
+                    url_tag = soup.find('a', href=True)
+                    if url_tag:
+                        url = url_tag['href']
+                    
+                    if not url:
+                        self.logger.warning(f"No URL found in {html_file}")
+                        total_errors += 1
+                        continue
+                    
+                    # Extract year and conference_session from directory name
+                    # Format is YYYYMM (e.g., 198510 for Oct 1985)
+                    dir_name = html_file.parent.name
+                    if len(dir_name) >= 6 and dir_name.isdigit():
+                        year = dir_name[:4]
+                        month = dir_name[4:6]
+                        conference_session = f"{year}-{month}"
+                    else:
+                        self.logger.warning(f"Invalid directory format: {dir_name} for {html_file}")
+                        total_errors += 1
+                        continue
+                    
+                    # Create talk data object
+                    talk_data = CompleteTalkData(
+                        title=title,
+                        author=author,
+                        calling=calling,
+                        content='',
+                        notes=[],
+                        url=url,
+                        language=language,
+                        year=year,
+                        conference_session=conference_session,
+                        extraction_timestamp='',
+                        note_count=note_count
+                    )
+                    
+                    # Backup metadata to database
+                    self._backup_talk_metadata(talk_data)
+                    total_processed += 1
+                    
+                    if total_processed % 100 == 0:
+                        self.logger.info(f"Processed {total_processed} HTML files...")
+                    
                 except Exception as e:
                     self.logger.warning(f"Error processing {html_file}: {e}")
+                    total_errors += 1
+        
+        self.logger.info(f"Backup complete: {total_processed} files processed, {total_errors} errors")
+        
         if hasattr(self, 'db'):
             self.db.close()
