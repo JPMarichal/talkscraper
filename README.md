@@ -17,13 +17,16 @@ Crear una herramienta robusta que recopile todos los discursos de conferencias g
    - ✅ Almacenamiento en base de datos SQLite con deduplicación
    - ✅ **Resultado (octubre 2025): 206 conferencias únicas (123 ENG + 83 SPA)**
 
-2. **Fase 2: Extracción de URLs de Discursos** ⏳ **(SIGUIENTE)**
-   - Obtención de URLs individuales de discursos desde cada conferencia
-   - Filtrado de contenido textual vs. videos
+2. **Fase 2: Extracción de URLs de Discursos** ✅ **(COMPLETADA)**
+   - ✅ Obtención de URLs individuales de discursos desde cada conferencia
+   - ✅ Filtrado de contenido textual vs. videos
+   - ✅ Almacenamiento incremental y marcado de progreso
 
-3. **Fase 3: Extracción de Contenido** ⏳ **(PENDIENTE)**
-   - Descarga de discursos completos con notas
-   - Organización en estructura de carpetas
+3. **Fase 3: Extracción de Contenido** 🚧 **(EN PROGRESO)**
+   - Extracción de contenido estático (título, autor, llamamiento, cuerpo)
+   - Extracción opcional de notas (Selenium, `--skip-notes`)
+   - Organización en estructura de carpetas por idioma/fecha
+   - Respaldo de metadatos en `talk_metadata`
 
 ## 📁 Estructura del Proyecto
 
@@ -152,23 +155,26 @@ Config: config.ini
 - (Décadas anteriores no disponibles en español)
 - **Cobertura: 1990-presente (34+ años)**
 
-## 🧪 Testing
+## 🧪 Testing & QA
 
-El proyecto incluye un framework completo de testing basado en pytest:
+El proyecto incluye un framework completo de testing basado en pytest y se integra con CI (GitHub Actions) para ejecutar la suite "fast" en cada push/pull request a `main`.
 
 ### Ejecutar Tests
 ```bash
 # Instalar dependencias de testing
 pip install -r requirements.txt
 
-# Ejecutar todos los tests
-python run_tests.py --type all
+# Ejecutar suite rápida (sin marcadores slow/selenium)
+python run_tests.py --type fast
 
 # Solo tests unitarios
 python run_tests.py --type unit
 
 # Solo tests de integración 
 python run_tests.py --type integration
+
+# Todos los tests (unitarios + integración + reporte de cobertura)
+python run_tests.py --type all
 
 # Tests con cobertura de código
 python run_tests.py --type coverage --html-report
@@ -259,16 +265,18 @@ Basado en el análisis de la estructura HTML:
 - [x] Manejo de errores robusto
 - [x] **206 conferencias únicas recolectadas y almacenadas**
 
-### ⏳ Próximo (Fase 2)
-- [ ] Extracción de URLs de discursos individuales desde cada conferencia
-- [ ] Análisis de estructura HTML de páginas de conferencias
-- [ ] Implementación del selector CSS para discursos: `li[data-content-type="general-conference-talk"] a`
+### ✅ Fase 2 completada
+- [x] Extracción de URLs de discursos individuales desde cada conferencia
+- [x] Análisis de estructura HTML de páginas de conferencias
+- [x] Implementación del selector CSS para discursos: `li[data-content-type="general-conference-talk"] a`
 
-### 🔮 Futuro (Fase 3)
-- [ ] Extracción de contenido completo de discursos con notas
-- [ ] Organización en estructura de carpetas por idioma/fecha
-- [x] Framework de testing (pytest) con cobertura de código
-- [ ] Documentación API
+### 🚧 Fase 3 en progreso
+- [x] Extracción de contenido estático con respaldo en DB
+- [x] Modo `--skip-notes` para omitir Selenium
+- [x] Reintentos por discurso y logging en `processing_log`
+- [ ] Extracción de notas vía Selenium
+- [ ] Organización completa en carpetas finales
+- [ ] Documentación API / reportes finales
 
 ## 🤝 Contribución
 
@@ -286,5 +294,5 @@ Este proyecto está desarrollado para uso educativo y de investigación, respeta
 
 ---
 
-**Estado**: Fase 1 COMPLETADA ✅ | **206 conferencias recolectadas** 📊  
-**Próximo**: Fase 2 - Extracción de URLs de Discursos ⏳
+**Estado**: Fase 3 en progreso 🚧 | **206 conferencias** y **>1.5K URLs de discursos** procesadas📊  
+**CI**: Workflow `tests.yml` ejecuta `python run_tests.py --type fast --verbose` en cada push/PR
