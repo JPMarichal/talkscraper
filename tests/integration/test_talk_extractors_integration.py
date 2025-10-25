@@ -5,10 +5,13 @@ Tests the complete flow of talk extraction, validation, and metadata storage
 as required by Milestone 6.
 """
 
+import gc
+import time
 import pytest
 import tempfile
 import sqlite3
 from pathlib import Path
+from contextlib import suppress
 from unittest.mock import Mock, patch, MagicMock
 from bs4 import BeautifulSoup
 
@@ -25,7 +28,16 @@ class TestTalkExtractionIntegration:
         with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as tf:
             db_path = tf.name
         yield db_path
-        Path(db_path).unlink(missing_ok=True)
+        gc.collect()
+        for _ in range(5):
+            try:
+                Path(db_path).unlink(missing_ok=True)
+                break
+            except PermissionError:
+                time.sleep(0.1)
+        else:
+            with suppress(PermissionError):
+                Path(db_path).unlink(missing_ok=True)
     
     @pytest.fixture
     def temp_output_dir(self):
