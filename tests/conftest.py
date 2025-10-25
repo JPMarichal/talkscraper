@@ -21,6 +21,8 @@ from freezegun import freeze_time
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
+FIXTURES_ROOT = Path(__file__).parent / "fixtures"
+
 from utils.config_manager import ConfigManager
 from utils.database_manager import DatabaseManager
 from utils.logger_setup import setup_logger
@@ -81,6 +83,20 @@ SAMPLE_TALK_URLS = {
 def test_config_dict():
     """Return test configuration dictionary."""
     return TEST_CONFIG
+
+
+@pytest.fixture
+def load_html_fixture():
+    """Load HTML fixture by file name from tests/fixtures/html."""
+    html_dir = FIXTURES_ROOT / "html"
+
+    def _loader(filename: str) -> str:
+        path = html_dir / filename
+        if not path.exists():
+            raise FileNotFoundError(f"HTML fixture not found: {path}")
+        return path.read_text(encoding="utf-8")
+
+    return _loader
 
 
 @pytest.fixture
