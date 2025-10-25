@@ -1116,14 +1116,12 @@ class TalkContentExtractor:
                     # Extract year and conference_session from directory name
                     # Format is YYYYMM (e.g., 198510 for Oct 1985)
                     dir_name = html_file.parent.name
-                    if len(dir_name) >= 6 and dir_name.isdigit():
-                        year = dir_name[:4]
-                        month = dir_name[4:6]
-                        conference_session = f"{year}-{month}"
-                    else:
+                    conference_session = self._parse_conference_session_from_dirname(dir_name)
+                    if not conference_session:
                         self.logger.warning(f"Invalid directory format: {dir_name} for {html_file}")
                         total_errors += 1
                         continue
+                    year = conference_session.split('-')[0]
                     
                     # Create talk data object
                     talk_data = CompleteTalkData(
@@ -1155,3 +1153,11 @@ class TalkContentExtractor:
         
         if hasattr(self, 'db'):
             self.db.close()
+
+    @staticmethod
+    def _parse_conference_session_from_dirname(dir_name: str) -> Optional[str]:
+        if len(dir_name) >= 6 and dir_name.isdigit():
+            year = dir_name[:4]
+            month = dir_name[4:6]
+            return f"{year}-{month}"
+        return None

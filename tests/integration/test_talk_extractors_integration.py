@@ -195,9 +195,7 @@ class TestTalkExtractionIntegration:
         
         # Test conference_session formatting
         dir_name = html_file.parent.name
-        year = dir_name[:4]
-        month = dir_name[4:6]
-        conference_session = f"{year}-{month}"
+        conference_session = TalkContentExtractor._parse_conference_session_from_dirname(dir_name)
         assert conference_session == "1985-10"
     
     @pytest.mark.integration
@@ -304,11 +302,8 @@ class TestMetadataRestoration:
         ]
         
         for dir_name, expected in test_cases:
-            if len(dir_name) >= 6 and dir_name.isdigit():
-                year = dir_name[:4]
-                month = dir_name[4:6]
-                conference_session = f"{year}-{month}"
-                assert conference_session == expected
+            conference_session = TalkContentExtractor._parse_conference_session_from_dirname(dir_name)
+            assert conference_session == expected
     
     @pytest.mark.integration
     def test_invalid_directory_format_handling(self):
@@ -316,5 +311,5 @@ class TestMetadataRestoration:
         invalid_dirs = ['invalid', '12345', 'abcd', '2025', '']
         
         for dir_name in invalid_dirs:
-            is_valid = len(dir_name) >= 6 and dir_name.isdigit()
-            assert is_valid is False
+            conference_session = TalkContentExtractor._parse_conference_session_from_dirname(dir_name)
+            assert conference_session is None
