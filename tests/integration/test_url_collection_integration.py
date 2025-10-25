@@ -7,7 +7,7 @@ HTTP requests, HTML parsing, and database storage.
 
 import pytest
 import responses
-from unittest.mock import patch, Mock
+from unittest.mock import patch
 
 from core.url_collector import URLCollector
 
