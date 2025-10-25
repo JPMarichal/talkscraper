@@ -269,13 +269,30 @@ class DatabaseManager:
                 }
                 for row in cursor.fetchall()
             ]
-            
+
         return {
             'conferences': conference_stats,
             'talks': talk_stats,
             'metadata': metadata_stats,
             'recent_conferences': recent_conferences
         }
+
+    def get_pending_talk_urls(self, language: str, limit: Optional[int] = None) -> List[str]:
+        """Get talk URLs that are pending processing for a language."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            query = '''
+                SELECT talk_url
+                FROM talk_urls
+                WHERE language = ? AND processed = FALSE
+                ORDER BY discovered_date ASC
+            '''
+            params = (language,)
+            if limit is not None:
+                query += ' LIMIT ?'
+                params = (language, limit)
+            cursor.execute(query, params)
+            return [row[0] for row in cursor.fetchall()]
 
     def get_processing_log_summary(self, limit: int = 5) -> Dict[str, Any]:
         """Get summary of processing log entries."""
@@ -369,11 +386,11 @@ class DatabaseManager:
                 for row in cursor.fetchall()
             ]
 
-        return {
-            'by_language': by_language,
-            'by_conference': by_conference,
-            'top_authors': top_authors
-        }
+            return {
+                'by_language': by_language,
+                'by_conference': by_conference,
+                'top_authors': top_authors
+            }
     
     def log_operation(self, operation: str, status: str, language: Optional[str] = None,
                      url: Optional[str] = None, message: Optional[str] = None):
